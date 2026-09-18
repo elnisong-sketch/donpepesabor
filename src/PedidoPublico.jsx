@@ -45,21 +45,42 @@ const IMG_CHEFS         = "/donpepechefs.jpg";
 function Landing({ onPedir }) {
   return (
     <div style={{ minHeight: "100vh", background: CREMA, fontFamily: "Georgia, 'Times New Roman', serif" }}>
+      <style>{`
+        .dp-hero { display: grid; grid-template-columns: 1fr 1fr; min-height: 420px; align-items: center; }
+        .dp-hero-img { height: 100%; min-height: 420px; }
+        .dp-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; align-items: stretch; }
+        .dp-sellos { display: flex; justify-content: space-around; flex-wrap: wrap; gap: 20px; }
+        .dp-hero-title { font-size: 56px; }
+        .dp-hero-subtitle { font-size: 44px; }
+        @media (max-width: 700px) {
+          .dp-hero { grid-template-columns: 1fr !important; }
+          .dp-hero-text { padding: 28px 20px 20px !important; }
+          .dp-hero-img { min-height: unset !important; height: auto !important; max-height: unset !important; }
+          .dp-hero-img img { height: auto !important; object-fit: contain !important; }
+          .dp-hero-title { font-size: 36px !important; }
+          .dp-hero-subtitle { font-size: 28px !important; }
+          .dp-grid-2 { grid-template-columns: 1fr !important; }
+          .dp-grid-2 img { max-height: 220px !important; object-fit: cover !important; }
+          .dp-grid-2-rev > :first-child { order: 2; }
+          .dp-grid-2-rev > :last-child { order: 1; }
+          .dp-sellos { flex-direction: column; align-items: center; }
+        }
+      `}</style>
 
       {/* Hero — 2 columnas */}
       <div style={{ background: `linear-gradient(160deg, #3d1a00 0%, ${VINO} 100%)` }}>
-        <div style={{ maxWidth: 1100, margin: "0 auto", display: "grid", gridTemplateColumns: "1fr 1fr", minHeight: 420, alignItems: "center" }}>
-          <div style={{ padding: "48px 40px 48px 48px" }}>
+        <div style={{ maxWidth: 1100, margin: "0 auto" }} className="dp-hero">
+          <div className="dp-hero-text" style={{ padding: "48px 40px 48px 48px" }}>
             <p style={{ color: "#e5d5b0", fontSize: 12, letterSpacing: 4, margin: "0 0 12px", textTransform: "uppercase" }}>Tequeños · Pasteles · Empanadas</p>
-            <h1 style={{ color: GOLD, margin: "0 0 4px", fontSize: 56, fontWeight: 900, fontStyle: "italic", lineHeight: 1 }}>Don Pepe</h1>
-            <h2 style={{ color: "#fff", margin: "0 0 16px", fontSize: 44, fontWeight: 900, fontStyle: "italic" }}>Sabor</h2>
+            <h1 className="dp-hero-title" style={{ color: GOLD, margin: "0 0 4px", fontWeight: 900, fontStyle: "italic", lineHeight: 1 }}>Don Pepe</h1>
+            <h2 className="dp-hero-subtitle" style={{ color: "#fff", margin: "0 0 16px", fontWeight: 900, fontStyle: "italic" }}>Sabor</h2>
             <p style={{ color: GOLD, fontSize: 20, fontStyle: "italic", margin: "0 0 12px" }}>❝ Sabor que te encanta ❞</p>
             <p style={{ color: "#c8b090", fontSize: 14, margin: "0 0 32px", lineHeight: 1.6 }}>Auténtica comida venezolana hecha con amor.<br/>Pedidos a domicilio en Madrid.</p>
             <button onClick={onPedir} style={{ background: GOLD, border: "none", borderRadius: 50, color: "#3d1a00", padding: "16px 44px", fontSize: 18, fontWeight: 900, cursor: "pointer", boxShadow: "0 4px 20px #0005", fontFamily: "inherit" }}>
               🛒 Haz tu pedido
             </button>
           </div>
-          <div style={{ height: "100%", minHeight: 420, overflow: "hidden", background: CREMA }}>
+          <div className="dp-hero-img" style={{ overflow: "hidden", background: CREMA }}>
             <img src={IMG_CHEFS} alt="Don Pepe Sabor"
               style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center", display: "block" }} />
           </div>
@@ -70,7 +91,7 @@ function Landing({ onPedir }) {
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "40px 24px" }}>
 
         {/* Tequeños: texto izq, foto der */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 24, alignItems: "stretch" }}>
+        <div className="dp-grid-2">
           <div style={{ background: "#fff8ed", border: "2px solid #e5d5b0", borderRadius: 14, padding: 20 }}>
             <SeccionTitulo titulo="TEQUEÑOS" />
             <FilaProducto nombre="Tequeños Tradicionales"     cantidad="25 uds" precio={12} />
@@ -87,7 +108,7 @@ function Landing({ onPedir }) {
         </div>
 
         {/* Pastelitos: foto izq, texto der */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 24, alignItems: "stretch" }}>
+        <div className="dp-grid-2 dp-grid-2-rev">
           <div style={{ borderRadius: 14, overflow: "hidden" }}>
             <img src={IMG_PASTEL_POLLO} alt="Pastelitos" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center", display: "block" }} />
           </div>
@@ -103,7 +124,7 @@ function Landing({ onPedir }) {
         </div>
 
         {/* Empanadas: texto izq, foto der */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 24, alignItems: "stretch" }}>
+        <div className="dp-grid-2">
           <div style={{ background: "#fff8ed", border: "2px solid #e5d5b0", borderRadius: 14, padding: 20 }}>
             <SeccionTitulo titulo="EMPANADAS" />
             <FilaProducto nombre="Empanada de Carne Molida"  cantidad="25 uds" precio={21} />
@@ -118,7 +139,7 @@ function Landing({ onPedir }) {
         </div>
 
         {/* Cachitos: foto izq, texto der */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 24, alignItems: "stretch" }}>
+        <div className="dp-grid-2 dp-grid-2-rev">
           <div style={{ borderRadius: 14, overflow: "hidden" }}>
             <img src={IMG_CACHITOS} alt="Cachitos" style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: "center", display: "block" }} />
           </div>
@@ -129,7 +150,7 @@ function Landing({ onPedir }) {
         </div>
 
         {/* Sellos */}
-        <div style={{ background: `linear-gradient(135deg, #3d1a00, ${VINO})`, borderRadius: 16, padding: "28px 32px", display: "flex", justifyContent: "space-around", flexWrap: "wrap", gap: 20, marginBottom: 28 }}>
+        <div className="dp-sellos" style={{ background: `linear-gradient(135deg, #3d1a00, ${VINO})`, borderRadius: 16, padding: "28px 32px", marginBottom: 28 }}>
           {[
             { icon: "🏅", texto: "Ingredientes de calidad" },
             { icon: "❤️", texto: "Hechos con amor para ti" },
@@ -226,8 +247,9 @@ async function calcularDistanciaOSRM(direccion, cp) {
 // ── FORMULARIO DE PEDIDO ─────────────────────────────────────────────────────
 function Formulario({ onVolver }) {
   const [productos, setProductos] = useState([]);
-  const [lineas, setLineas]       = useState([{ productoId: "", presentacion: "", cantidad: 1 }]);
-  const [form, setForm]           = useState({ nombre: "", telefono: "", direccion: "", cp: "", formaPago: "", horaDesde: "", horaHasta: "", tipoEntrega: "Domicilio" });
+  const [lineas, setLineas]       = useState([{ productoId: "", presentacion: "", cantidad: 1, preparacion: "" }]);
+  const hoyISO = new Date().toISOString().slice(0, 10);
+  const [form, setForm]           = useState({ nombre: "", telefono: "", direccion: "", cp: "", formaPago: "", horaDesde: "", horaHasta: "", tipoEntrega: "Domicilio", fechaEntrega: hoyISO });
   const [paso, setPaso]           = useState("form"); // form | enviando | confirmado
   const [error, setError]         = useState("");
   const [costoEnvio, setCostoEnvio] = useState(6);
@@ -257,14 +279,14 @@ function Formulario({ onVolver }) {
 
   const COSTO_FRITO = 5;
 
-  const addLinea = () => setLineas(l => [...l, { productoId: "", presentacion: "", cantidad: 1, preparacion: "Congelado" }]);
+  const addLinea = () => setLineas(l => [...l, { productoId: "", presentacion: "", cantidad: 1, preparacion: "" }]);
   const removeLinea = i => setLineas(l => l.filter((_, idx) => idx !== i));
-  const updateLinea = (i, key, val) => setLineas(l => l.map((li, idx) => idx === i ? { ...li, [key]: val, ...(key === "productoId" ? { presentacion: "" } : {}) } : li));
+  const updateLinea = (i, key, val) => setLineas(l => l.map((li, idx) => idx === i ? { ...li, [key]: val, ...(key === "productoId" ? { presentacion: "", preparacion: "" } : {}) } : li));
 
   const lineasValidas = lineas.filter(l => l.productoId && l.presentacion && l.cantidad > 0);
   const lineasFrito = lineas.filter(l => l.productoId && l.preparacion === "Frito");
   const hayFrito = lineasFrito.length > 0;
-  const cantidadFritos = lineasFrito.length;
+  const cantidadFritos = lineasFrito.reduce((sum, l) => sum + Number(l.cantidad || 1), 0);
   const total = lineasValidas.reduce((s, l) => {
     const prod = productos.find(p => p.id === l.productoId);
     const vari = prod?.variantes.find(v => v.presentacion === l.presentacion);
@@ -277,6 +299,8 @@ function Formulario({ onVolver }) {
     const sinPresentacion = lineas.filter(l => l.productoId && !l.presentacion);
     if (sinPresentacion.length > 0) return setError("⚠️ Hay productos sin presentación seleccionada. Por favor, completa todos los productos.");
     if (lineasValidas.length === 0) return setError("⚠️ Añade al menos un producto válido.");
+    const sinPreparacion = lineas.filter(l => l.productoId && l.presentacion && !l.preparacion);
+    if (sinPreparacion.length > 0) return setError("⚠️ Selecciona si cada producto es Congelado o Frito.");
 
     // Validar datos personales
     if (!form.nombre.trim())   return setError("⚠️ Por favor, introduce tu nombre completo.");
@@ -290,12 +314,11 @@ function Formulario({ onVolver }) {
     }
 
     // Validar pago y horario
+    if (!form.fechaEntrega) return setError("⚠️ Por favor, selecciona la fecha de entrega.");
     if (!form.formaPago)                    return setError("⚠️ Por favor, selecciona una forma de pago.");
     if (!form.horaDesde || !form.horaHasta) return setError("⚠️ Por favor, indica la franja horaria en la que deseas recibir el pedido.");
     setError(""); setPaso("enviando");
     try {
-      const snap = await getDoc(doc(db, "datos", "pedidos"));
-      const actuales = snap.exists() ? JSON.parse(snap.data().valor) : [];
       const items = lineasValidas.map((l, idx) => {
         const prod = productos.find(p => p.id === l.productoId);
         const vari = prod?.variantes.find(v => v.presentacion === l.presentacion);
@@ -303,28 +326,25 @@ function Formulario({ onVolver }) {
       });
       const envio = form.tipoEntrega === "Domicilio" && form.cp.startsWith("28") ? costoEnvio : 0;
       const servicio = cantidadFritos * COSTO_FRITO;
-      const nuevoPedido = { id: "web-" + Date.now(), ...form, tipoEntrega: "Domicilio", fecha: hoy(), estado: "Pendiente", envio, servicio, repartidorId: "", notas: "", items, total };
-      await setDoc(doc(db, "datos", "pedidos"), { valor: JSON.stringify([...actuales, nuevoPedido]) });
-
+      const nuevoPedido = { id: "web-" + Date.now(), ...form, fecha: hoy(), estado: "Pendiente", envio, servicio, repartidorId: "", notas: "", items, total };
       // Enviar a Google Sheets via GET
       const productosTexto = items.map(i => `• ${i.nombreProducto} (${i.presentacion}) x${i.cantidad} [${i.preparacion}]`).join("\n");
       const totalFinal = total + envio + servicio;
       const params = new URLSearchParams({
         id: nuevoPedido.id,
-        fecha: nuevoPedido.fecha,
+        fecha: form.fechaEntrega,
         horario: form.horaDesde + " a " + form.horaHasta,
-        entrega: form.tipoEntrega,
         cliente: form.nombre,
         telefono: form.telefono,
-        cp: form.cp,
-        direccion: form.direccion,
+        cp: form.tipoEntrega === "Domicilio" ? form.cp : "",
+        direccion: form.tipoEntrega === "Domicilio" ? form.direccion : "",
         productos: productosTexto,
         pago: form.formaPago,
         subtotal: total.toFixed(2) + " €",
         servicio: servicio.toFixed(2) + " €",
         envio: envio.toFixed(2) + " €",
         total: totalFinal.toFixed(2) + " €",
-        notas: form.notas || ""
+        notas: (form.tipoEntrega === "Recogida" ? "🏪 Recogida en tienda" : "🚚 Domicilio") + (form.notas ? " | " + form.notas : "")
       });
       fetch("https://script.google.com/macros/s/AKfycbySjQNlkoTT_Wo28xxCKRgk41QvXaECsItCooxiqmwxdn5xNqUORVtHWCX7hhAC8gSY/exec?" + params.toString(), {
         mode: "no-cors"
@@ -339,7 +359,7 @@ function Formulario({ onVolver }) {
       <div style={{ fontSize: 72 }}>✅</div>
       <h2 style={{ color: NAVY, marginTop: 16, fontSize: 26 }}>¡Pedido recibido!</h2>
       <p style={{ color: "#64748b", maxWidth: 320, fontSize: 15 }}>Nos pondremos en contacto contigo para confirmar la entrega.</p>
-      <p style={{ color: ORANGE, fontWeight: 900, fontSize: 24, margin: "8px 0 24px" }}>Total: {(total + (form.cp.startsWith("28") ? costoEnvio : 0) + (cantidadFritos * COSTO_FRITO)).toFixed(2)} €</p>
+      <p style={{ color: ORANGE, fontWeight: 900, fontSize: 24, margin: "8px 0 24px" }}>Total: {(total + (form.tipoEntrega === "Domicilio" && form.cp.startsWith("28") ? costoEnvio : 0) + (cantidadFritos * COSTO_FRITO)).toFixed(2)} €</p>
       <button onClick={onVolver} style={{ background: NAVY, border: "none", borderRadius: 50, color: "#fff", padding: "14px 32px", fontSize: 16, fontWeight: 700, cursor: "pointer" }}>← Volver al inicio</button>
     </div>
   );
@@ -394,21 +414,40 @@ function Formulario({ onVolver }) {
                       <input type="number" min="1" max="99" value={linea.cantidad} onChange={e => updateLinea(i, "cantidad", e.target.value)}
                         style={{ flex: 1, padding: "10px 12px", border: "1.5px solid #e2e8f0", borderRadius: 10, fontSize: 14, fontFamily: "inherit", textAlign: "center", boxSizing: "border-box" }} />
                     </div>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      {["Congelado", "Frito"].map(op => (
-                        <button key={op} onClick={() => updateLinea(i, "preparacion", op)}
-                          style={{ flex: 1, padding: "8px", borderRadius: 10, border: `1.5px solid ${linea.preparacion === op ? (op === "Frito" ? ORANGE : NAVY) : "#e2e8f0"}`, background: linea.preparacion === op ? (op === "Frito" ? ORANGE : NAVY) : "#fff", color: linea.preparacion === op ? "#fff" : "#64748b", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
-                          {op === "Frito" ? "🔥 Frito" : "❄️ Congelado"}
-                        </button>
-                      ))}
-                    </div>
+                    {linea.presentacion ? (
+                      <div style={{ display: "flex", gap: 8 }}>
+                        {["Congelado", "Frito"].map(op => {
+                          const activo = linea.preparacion === op;
+                          return (
+                            <button key={op} onClick={() => updateLinea(i, "preparacion", op)}
+                              style={{ flex: 1, padding: "8px", borderRadius: 10,
+                                border: `1.5px solid ${activo ? (op === "Frito" ? ORANGE : NAVY) : "#e2e8f0"}`,
+                                background: activo ? (op === "Frito" ? ORANGE : NAVY) : "#fff",
+                                color: activo ? "#fff" : "#64748b",
+                                fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                              {op === "Frito" ? "🔥 Frito" : "❄️ Congelado"}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p style={{ margin: 0, fontSize: 12, color: "#94a3b8", fontStyle: "italic" }}>Selecciona una presentación para elegir preparación</p>
+                    )}
                   </>
                 )}
               </div>
             );
           })}
 
-          <button onClick={addLinea} style={{ width: "100%", background: "transparent", border: `1.5px dashed ${ORANGE}`, borderRadius: 10, color: ORANGE, padding: "10px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginTop: 4 }}>
+          <button onClick={() => {
+              const sinProducto = lineas.find(l => !l.productoId);
+              if (sinProducto) return setError("⚠️ Selecciona un producto antes de añadir otro.");
+              const sinPresentacion = lineas.find(l => !l.presentacion);
+              if (sinPresentacion) return setError("⚠️ Selecciona la presentación del producto antes de añadir otro.");
+              const sinPreparacion = lineas.find(l => !l.preparacion);
+              if (sinPreparacion) return setError("⚠️ Selecciona si el producto es Congelado o Frito antes de añadir otro.");
+              addLinea();
+            }} style={{ width: "100%", background: "transparent", border: `1.5px dashed ${ORANGE}`, borderRadius: 10, color: ORANGE, padding: "10px", fontSize: 14, fontWeight: 700, cursor: "pointer", marginTop: 4 }}>
             + Añadir otro producto
           </button>
         </div>
@@ -416,6 +455,14 @@ function Formulario({ onVolver }) {
         {/* Datos cliente */}
         <div style={{ background: "#fff", borderRadius: 16, padding: 20, marginBottom: 16, boxShadow: "0 1px 6px #0001" }}>
           <h3 style={{ color: NAVY, margin: "0 0 16px", fontSize: 17, fontWeight: 800 }}>📋 Tus datos</h3>
+
+          {/* Fecha de entrega */}
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#475569", marginBottom: 8 }}>📅 Fecha de entrega *</label>
+            <input type="date" value={form.fechaEntrega} min={hoyISO}
+              onChange={e => setForm(f => ({ ...f, fechaEntrega: e.target.value }))}
+              style={{ width: "100%", padding: "10px 12px", border: "1.5px solid #e2e8f0", borderRadius: 10, fontSize: 15, fontFamily: "inherit", boxSizing: "border-box" }} />
+          </div>
 
           {/* Tipo de entrega */}
           <div style={{ marginBottom: 16 }}>
@@ -563,7 +610,7 @@ function Formulario({ onVolver }) {
           </div>
         )}
 
-        {error && <p style={{ color: "#dc2626", fontWeight: 600, fontSize: 14, textAlign: "center", marginBottom: 12 }}>⚠️ {error}</p>}
+        {error && <p style={{ color: "#dc2626", fontWeight: 600, fontSize: 14, textAlign: "center", marginBottom: 12 }}>{error}</p>}
 
         <button onClick={enviar} disabled={paso === "enviando"}
           style={{ width: "100%", background: paso === "enviando" ? "#94a3b8" : ORANGE, border: "none", borderRadius: 50, color: "#fff", padding: "16px", fontSize: 17, fontWeight: 800, cursor: paso === "enviando" ? "default" : "pointer", boxShadow: "0 4px 16px #f9731644" }}>
