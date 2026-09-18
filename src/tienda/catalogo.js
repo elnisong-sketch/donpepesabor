@@ -11,7 +11,7 @@ export const WHATSAPP = '34658083047'
 // Hoja de Google que registra cada pedido (Apps Script).
 export const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbySjQNlkoTT_Wo28xxCKRgk41QvXaECsItCooxiqmwxdn5xNqUORVtHWCX7hhAC8gSY/exec'
 
-export const DIRECCION_LOCAL = 'Berrocal 56, 28021 Madrid'
+export const DIRECCION_LOCAL = 'Calle Berrocal 56, 28021 Madrid'
 export const COSTO_FRITO = 5          // € por bandeja frita
 export const PAGOS = ['Bizum', 'Efectivo', 'Transferencia', 'Tarjeta']
 export const PREPARACIONES = ['Congelado', 'Frito']

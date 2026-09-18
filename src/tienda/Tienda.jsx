@@ -105,7 +105,7 @@ export default function Tienda() {
           <div className="col">
             <Sello titulo="Ingredientes de calidad" pie="Receta venezolana de siempre" />
             <Sello titulo="Congelados o fritos" pie="Tú eliges cómo los quieres" />
-            <Sello titulo="Reparto en Madrid" pie="O recógelos en Carabanchel" />
+            <Sello titulo="Reparto en Madrid" pie="O recógelos en Villaverde" />
           </div>
         </div>
       </section>
