@@ -14,7 +14,17 @@ export const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbySjQNlkoTT_W
 export const DIRECCION_LOCAL = 'Calle Berrocal 56, 28021 Madrid'
 export const COSTO_FRITO = 5          // € por bandeja frita
 export const PAGOS = ['Bizum', 'Efectivo', 'Transferencia', 'Tarjeta']
-export const PREPARACIONES = ['Congelado', 'Frito']
+// Cómo se puede pedir cada producto. Solo "Frito" lleva recargo (COSTO_FRITO).
+const PREP = {
+  Congelado: { icono: '❄️', detalle: 'Para freír en casa' },
+  Frito:     { icono: '🔥', detalle: 'Listo para comer' },
+  Crudo:     { icono: '🥐', detalle: 'Para hornear en casa' },
+  Horneado:  { icono: '🔥', detalle: 'Listo para comer' },
+}
+export const preparacionesDe = (p) =>
+  /cachito/i.test(p.nombre || '') ? ['Crudo', 'Horneado'] : ['Congelado', 'Frito']
+export const etiquetaPrep = (prep) => `${PREP[prep]?.icono || ''} ${prep}`.trim()
+export const detallePrep = (prep) => PREP[prep]?.detalle || ''
 
 // Prefijos del teléfono del cliente. España primero, por defecto.
 export const PREFIJOS = [
@@ -55,12 +65,12 @@ const FOTOS = {
   p7: 'pastelito-pollo',
   p8: 'pastelito-molida',
   p9: 'pastelito-molida',
-  p10: 'pastelito-queso',
+  p10: 'pastelito-jamon-y-queso',
   p11: 'pastelito-molida',
   p12: 'pastelito-pollo',
   p13: 'empanadita-carne',
   p14: 'empanadita-pollo',
-  p15: 'empanadita-carne',
+  p15: 'empanadita-carne-mechada',
   p16: 'empanadita-queso',
   p17: 'empanadita-queso',
   p18: 'cachito-jamon-y-queso',

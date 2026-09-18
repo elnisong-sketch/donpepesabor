@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { COSTO_FRITO, PREPARACIONES, eur, fotoDe, unidades } from './catalogo.js'
+import { COSTO_FRITO, detallePrep, etiquetaPrep, eur, fotoDe, preparacionesDe, unidades } from './catalogo.js'
 
 /** Ficha del producto: aquí se elige la bandeja, congelado o frito, y la cantidad. */
 export default function Ficha({ p, onAgregar, onCerrar }) {
@@ -27,7 +27,7 @@ export default function Ficha({ p, onAgregar, onCerrar }) {
   }
 
   const textoBoton = !variante ? 'Elige la bandeja'
-    : !preparacion ? 'Elige congelado o frito'
+    : !preparacion ? `Elige ${preparacionesDe(p).join(' o ').toLowerCase()}`
     : `Añadir al pedido · ${eur(precioUnidad * cantidad)}`
 
   return (
@@ -62,11 +62,11 @@ export default function Ficha({ p, onAgregar, onCerrar }) {
             <div>
               <span className="opt-label">¿Cómo lo quieres?</span>
               <div className="opt-row prep">
-                {PREPARACIONES.map((op) => (
-                  <button key={op} className={`prep-pick${op === preparacion ? ' on' : ''}${op === 'Frito' ? ' frito' : ''}`}
+                {preparacionesDe(p).map((op) => (
+                  <button key={op} className={`prep-pick${op === preparacion ? ' on' : ''}${op === 'Frito' || op === 'Horneado' ? ' frito' : ''}`}
                     onClick={() => setPreparacion(op)}>
-                    <b>{op === 'Frito' ? '🔥 Frito' : '❄️ Congelado'}</b>
-                    <small>{op === 'Frito' ? `Listo para comer · +${eur(COSTO_FRITO)}` : 'Para freír en casa'}</small>
+                    <b>{etiquetaPrep(op)}</b>
+                    <small>{detallePrep(op)}{op === 'Frito' ? ` · +${eur(COSTO_FRITO)}` : ''}</small>
                   </button>
                 ))}
               </div>

@@ -4,7 +4,7 @@
  * perder el registro es malo, perder el pedido es peor.
  */
 
-import { COSTO_FRITO, DIRECCION_LOCAL, SHEETS_URL, WHATSAPP, eur } from './catalogo.js'
+import { COSTO_FRITO, DIRECCION_LOCAL, SHEETS_URL, WHATSAPP, etiquetaPrep, eur } from './catalogo.js'
 
 export function nuevoCodigo() {
   return 'DP-' + String(Math.floor(1000 + Math.random() * 9000))
@@ -46,7 +46,7 @@ export function whatsappDe(telefono) {
 }
 
 const lineaProducto = (l) =>
-  `• ${l.nombre} — ${l.presentacion} · ${l.preparacion === 'Frito' ? '🔥 Frito' : '❄️ Congelado'} (x${l.cantidad}) — ${eur(l.precio * l.cantidad)}`
+  `• ${l.nombre} — ${l.presentacion} · ${etiquetaPrep(l.preparacion)} (x${l.cantidad}) — ${eur(l.precio * l.cantidad)}`
 
 /** Texto que recibe la tienda por WhatsApp (los asteriscos son negritas). */
 export function redactarMensaje(d, items, envio, distancia) {

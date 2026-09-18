@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { COSTO_FRITO, DIRECCION_LOCAL, PAGOS, PREFIJOS, eur, unidades } from './catalogo.js'
+import { COSTO_FRITO, DIRECCION_LOCAL, PAGOS, PREFIJOS, etiquetaPrep, eur, unidades } from './catalogo.js'
 import { TARIFA_BASE, TEXTO_TARIFAS, calcularEnvio } from './envio.js'
 import {
   conPlazo, hoyLocal, irAWhatsapp, nuevoCodigo, redactarMensaje, registrarEnHoja, totalesDe,
@@ -101,7 +101,7 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
               <div>
                 <div className="line-name">{l.nombre}</div>
                 <div className="line-var">
-                  {unidades(l.presentacion)} · {l.preparacion === 'Frito' ? '🔥 Frito' : '❄️ Congelado'}
+                  {unidades(l.presentacion)} · {etiquetaPrep(l.preparacion)}
                 </div>
                 <div className="line-bot">
                   <div className="qty-sm">

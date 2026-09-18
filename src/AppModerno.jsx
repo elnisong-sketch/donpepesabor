@@ -716,6 +716,12 @@ function ModuloInventario({ productos, setProductos }) {
     setProductos(ps => ps.map(p => p.id === prodId ? { ...p, variantes: p.variantes.filter(v => v.presentacion !== presentacion) } : p));
   };
 
+  const renombrarProducto = (prod) => {
+    const nombre = prompt("Nuevo nombre del producto:", prod.nombre);
+    if (!nombre || !nombre.trim() || nombre.trim() === prod.nombre) return;
+    setProductos(ps => ps.map(p => p.id === prod.id ? { ...p, nombre: nombre.trim() } : p));
+  };
+
   const eliminarProducto = (prodId) => {
     if (!confirm("¿Eliminar este producto?")) return;
     setProductos(ps => ps.filter(p => p.id !== prodId));
@@ -739,7 +745,11 @@ function ModuloInventario({ productos, setProductos }) {
           {productos.filter(p => p.categoria === cat).map(prod => (
             <Card key={prod.id} accent={ac}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                <p style={{ color: TEXT_MAIN, fontWeight: 700, margin: 0 }}>{prod.nombre}</p>
+                <p style={{ color: TEXT_MAIN, fontWeight: 700, margin: 0 }}>
+                  {prod.nombre}
+                  <button onClick={() => renombrarProducto(prod)} title="Cambiar nombre"
+                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, marginLeft: 6, padding: 0 }}>✏️</button>
+                </p>
                 <div style={{ display: "flex", gap: 6 }}>
                   <button onClick={() => { setModalPres(prod.id); setNuevaPres(""); }}
                     style={{ background: ac + "18", border: `1px solid ${ac}44`, borderRadius: 8, color: ac, padding: "5px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
