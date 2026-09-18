@@ -184,6 +184,10 @@
 .dps .field label{font-size:12px;font-weight:700;color:var(--ink-soft)}
 .dps .field input{border:1.5px solid var(--cream-2);border-radius:9px;padding:10px 12px;font:inherit;background:var(--paper);color:var(--ink);width:100%;min-width:0}
 .dps .field input:focus{border-color:var(--gold);outline:none}
+.dps .tel{display:grid;grid-template-columns:auto 1fr;gap:8px}
+.dps .pref{position:relative;display:flex;align-items:center;border:1.5px solid var(--cream-2);border-radius:9px;padding:0 10px;background:var(--paper);font-weight:700;white-space:nowrap;cursor:pointer}
+.dps .pref:focus-within{border-color:var(--gold)}
+.dps .pref select{position:absolute;inset:0;width:100%;opacity:0;cursor:pointer}
 .dps .franja{display:flex;align-items:center;gap:8px}
 .dps .franja span{font-weight:700;color:var(--ink-soft)}
 .dps .radios.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}

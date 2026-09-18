@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { COSTO_FRITO, DIRECCION_LOCAL, PAGOS, eur, unidades } from './catalogo.js'
+import { COSTO_FRITO, DIRECCION_LOCAL, PAGOS, PREFIJOS, eur, unidades } from './catalogo.js'
 import { TARIFA_BASE, TEXTO_TARIFAS, calcularEnvio } from './envio.js'
 import {
   conPlazo, hoyLocal, irAWhatsapp, nuevoCodigo, redactarMensaje, registrarEnHoja, totalesDe,
@@ -9,7 +9,7 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
   const [codigo] = useState(nuevoCodigo)
   const [datos, setDatos] = useState({
     tipoEntrega: 'Domicilio', fechaEntrega: hoyLocal(), horaDesde: '', horaHasta: '',
-    nombre: '', telefono: '', direccion: '', cp: '', formaPago: '', nota: '',
+    nombre: '', prefijo: '34', telefono: '', direccion: '', cp: '', formaPago: '', nota: '',
   })
   const [distancia, setDistancia] = useState(null)   // { km, tarifa }
   const [calculando, setCalculando] = useState(false)
@@ -31,6 +31,12 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
     return () => clearTimeout(t)
   }, [datos.direccion, datos.cp, domicilio, cpMadrid])
 
+  // Si el cliente escribe él mismo "+..." o "00...", se respeta; si no, se le pone el prefijo elegido.
+  const tel = datos.telefono.trim()
+  const telefonoCompleto = !tel ? '' : /^(\+|00)/.test(tel) ? tel : `+${datos.prefijo} ${tel}`
+  const cifrasTel = tel.replace(/\D/g, '').length
+  const telOk = datos.prefijo === '34' && !/^(\+|00)/.test(tel) ? cifrasTel === 9 : cifrasTel >= 6
+
   const envio = domicilio ? (distancia?.tarifa ?? TARIFA_BASE) : 0
   const t = totalesDe(carrito, envio)
   const bandejas = carrito.reduce((s, l) => s + l.cantidad, 0)
@@ -41,17 +47,18 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
     if (!datos.horaDesde || !datos.horaHasta) return 'Indica la franja horaria'
     if (datos.horaHasta <= datos.horaDesde) return 'La hora final debe ser posterior a la inicial'
     if (!datos.nombre.trim()) return 'Escribe tu nombre'
-    if (datos.telefono.replace(/\D/g, '').length < 9) return 'Escribe tu teléfono'
+    if (!tel) return 'Escribe tu teléfono'
+    if (!telOk) return 'Revisa el teléfono: faltan o sobran números'
     if (domicilio && !datos.direccion.trim()) return 'Escribe la dirección de entrega'
     if (domicilio && !datos.cp.trim()) return 'Escribe el código postal'
     if (domicilio && !cpMadrid) return 'Solo repartimos en Madrid (código postal 28xxx)'
     if (!datos.formaPago) return 'Elige la forma de pago'
     return ''
-  }, [carrito.length, datos, domicilio, cpMadrid])
+  }, [carrito.length, datos, domicilio, cpMadrid, tel, telOk])
 
   const mensaje = useMemo(
-    () => redactarMensaje({ ...datos, codigo }, carrito, envio, distancia),
-    [datos, codigo, carrito, envio, distancia]
+    () => redactarMensaje({ ...datos, telefono: telefonoCompleto, codigo }, carrito, envio, distancia),
+    [datos, telefonoCompleto, codigo, carrito, envio, distancia]
   )
 
   const cambiar = (campo) => (e) => setDatos({ ...datos, [campo]: e.target.value })
@@ -67,7 +74,7 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
     if (falta || enviando) return
     setEnviando(true)
     try {
-      await conPlazo(registrarEnHoja({ ...datos, codigo }, carrito, envio))
+      await conPlazo(registrarEnHoja({ ...datos, telefono: telefonoCompleto, codigo }, carrito, envio))
     } catch (e) {
       console.error('No se pudo registrar el pedido en la hoja; se sigue a WhatsApp.', e)
     }
@@ -149,8 +156,20 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
                 </div>
                 <div className="field">
                   <label htmlFor="fTel">Teléfono (WhatsApp)</label>
-                  <input id="fTel" value={datos.telefono} onChange={cambiar('telefono')} placeholder="612 345 678" inputMode="tel" autoComplete="tel" />
-                  <span className="hint">Si no es español, escríbelo con el prefijo del país, por ejemplo +44 7700 900123</span>
+                  <div className="tel">
+                    {/* Cerrado muestra solo bandera y prefijo; al abrirlo, la lista con los países. */}
+                    <label className="pref">
+                      <span>{PREFIJOS.find(([n]) => n === datos.prefijo)?.[1]} +{datos.prefijo} ▾</span>
+                      <select aria-label="Prefijo del país" value={datos.prefijo} onChange={cambiar('prefijo')}>
+                        {PREFIJOS.map(([n, bandera, pais]) => (
+                          <option key={n + pais} value={n}>{bandera} {pais} (+{n})</option>
+                        ))}
+                      </select>
+                    </label>
+                    <input id="fTel" value={datos.telefono} onChange={cambiar('telefono')}
+                      placeholder={datos.prefijo === '34' ? '612 345 678' : 'Número sin el prefijo'}
+                      inputMode="tel" autoComplete="tel-national" />
+                  </div>
                 </div>
                 {domicilio && (
                   <>

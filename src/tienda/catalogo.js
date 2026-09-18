@@ -16,6 +16,30 @@ export const COSTO_FRITO = 5          // € por bandeja frita
 export const PAGOS = ['Bizum', 'Efectivo', 'Transferencia', 'Tarjeta']
 export const PREPARACIONES = ['Congelado', 'Frito']
 
+// Prefijos del teléfono del cliente. España primero, por defecto.
+export const PREFIJOS = [
+  ['34', '🇪🇸', 'España'],
+  ['58', '🇻🇪', 'Venezuela'],
+  ['57', '🇨🇴', 'Colombia'],
+  ['51', '🇵🇪', 'Perú'],
+  ['593', '🇪🇨', 'Ecuador'],
+  ['54', '🇦🇷', 'Argentina'],
+  ['56', '🇨🇱', 'Chile'],
+  ['52', '🇲🇽', 'México'],
+  ['1', '🇺🇸', 'EE. UU.'],
+  ['1809', '🇩🇴', 'Rep. Dominicana'],
+  ['53', '🇨🇺', 'Cuba'],
+  ['591', '🇧🇴', 'Bolivia'],
+  ['598', '🇺🇾', 'Uruguay'],
+  ['595', '🇵🇾', 'Paraguay'],
+  ['504', '🇭🇳', 'Honduras'],
+  ['44', '🇬🇧', 'Reino Unido'],
+  ['33', '🇫🇷', 'Francia'],
+  ['351', '🇵🇹', 'Portugal'],
+  ['39', '🇮🇹', 'Italia'],
+  ['49', '🇩🇪', 'Alemania'],
+]
+
 export const eur = (n) =>
   Number(n || 0).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })
 
