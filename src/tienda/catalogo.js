@@ -6,7 +6,7 @@
  */
 
 // Número de WhatsApp que recibe los pedidos, con prefijo de país y sin "+" ni espacios.
-export const WHATSAPP = '34658083047'
+export const WHATSAPP = '34604136371'
 
 // Hoja de Google que registra cada pedido (Apps Script).
 export const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbySjQNlkoTT_Wo28xxCKRgk41QvXaECsItCooxiqmwxdn5xNqUORVtHWCX7hhAC8gSY/exec'
