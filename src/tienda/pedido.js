@@ -31,6 +31,20 @@ export function totalesDe(items, envio) {
   return { productos, bandejasFritas, fritura, envio: costoEnvio, total: productos + fritura + costoEnvio }
 }
 
+/**
+ * Número del cliente en formato internacional, sin "+" ni espacios, o null si no se reconoce.
+ * "+44 7700 900123" / "0044..." → "447700900123"; un móvil español de 9 cifras → "34...".
+ */
+export function whatsappDe(telefono) {
+  const t = String(telefono || '').trim()
+  const d = t.replace(/\D/g, '')
+  if (t.startsWith('+')) return d.length >= 8 ? d : null
+  if (d.startsWith('00')) return d.length >= 10 ? d.slice(2) : null
+  if (/^[6789]\d{8}$/.test(d)) return '34' + d
+  if (/^34[6789]\d{8}$/.test(d)) return d
+  return null
+}
+
 const lineaProducto = (l) =>
   `• ${l.nombre} — ${l.presentacion} · ${l.preparacion === 'Frito' ? '🔥 Frito' : '❄️ Congelado'} (x${l.cantidad}) — ${eur(l.precio * l.cantidad)}`
 
@@ -41,6 +55,8 @@ export function redactarMensaje(d, items, envio, distancia) {
   L.push(`*Pedido:* ${d.codigo}`)
   L.push(`*Nombre:* ${d.nombre || '—'}`)
   L.push(`*Teléfono:* ${d.telefono || '—'}`)
+  const wa = whatsappDe(d.telefono)
+  if (wa) L.push(`https://wa.me/${wa}`)
   if (d.tipoEntrega === 'Domicilio') {
     const km = distancia ? ` (${distancia.km} km)` : ''
     L.push(`*Entrega:* 🚚 A domicilio — ${d.direccion || '—'}, ${d.cp || '—'}${km}`)

@@ -148,8 +148,9 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
                   <input id="fNom" value={datos.nombre} onChange={cambiar('nombre')} placeholder="María García" autoComplete="name" />
                 </div>
                 <div className="field">
-                  <label htmlFor="fTel">Teléfono</label>
+                  <label htmlFor="fTel">Teléfono (WhatsApp)</label>
                   <input id="fTel" value={datos.telefono} onChange={cambiar('telefono')} placeholder="612 345 678" inputMode="tel" autoComplete="tel" />
+                  <span className="hint">Si no es español, escríbelo con el prefijo del país, por ejemplo +44 7700 900123</span>
                 </div>
                 {domicilio && (
                   <>
