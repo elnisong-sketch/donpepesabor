@@ -15,14 +15,13 @@ export const DIRECCION_LOCAL = 'Calle Berrocal 56, 28021 Madrid'
 export const COSTO_FRITO = 5          // € por bandeja frita
 export const PAGOS = ['Bizum', 'Efectivo', 'Transferencia', 'Tarjeta']
 // Cómo se puede pedir cada producto. Solo "Frito" lleva recargo (COSTO_FRITO).
+// Los cachitos no tienen opción: se piden tal cual.
 const PREP = {
   Congelado: { icono: '❄️', detalle: 'Para freír en casa' },
   Frito:     { icono: '🔥', detalle: 'Listo para comer' },
-  Crudo:     { icono: '🥐', detalle: 'Para hornear en casa' },
-  Horneado:  { icono: '🔥', detalle: 'Listo para comer' },
 }
 export const preparacionesDe = (p) =>
-  /cachito/i.test(p.nombre || '') ? ['Crudo', 'Horneado'] : ['Congelado', 'Frito']
+  /cachito/i.test(p.nombre || '') ? [] : ['Congelado', 'Frito']
 export const etiquetaPrep = (prep) => `${PREP[prep]?.icono || ''} ${prep}`.trim()
 export const detallePrep = (prep) => PREP[prep]?.detalle || ''
 

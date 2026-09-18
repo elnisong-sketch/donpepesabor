@@ -101,7 +101,7 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
               <div>
                 <div className="line-name">{l.nombre}</div>
                 <div className="line-var">
-                  {unidades(l.presentacion)} · {etiquetaPrep(l.preparacion)}
+                  {unidades(l.presentacion)}{l.preparacion ? ` · ${etiquetaPrep(l.preparacion)}` : ''}
                 </div>
                 <div className="line-bot">
                   <div className="qty-sm">

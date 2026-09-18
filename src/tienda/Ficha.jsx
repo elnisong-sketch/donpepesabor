@@ -5,12 +5,13 @@ import { COSTO_FRITO, detallePrep, etiquetaPrep, eur, fotoDe, preparacionesDe, u
 export default function Ficha({ p, onAgregar, onCerrar }) {
   const variantes = p.variantes || []
   const [presentacion, setPresentacion] = useState(variantes.length === 1 ? variantes[0].presentacion : null)
-  const [preparacion, setPreparacion] = useState(null)
+  const opciones = preparacionesDe(p)
+  const [preparacion, setPreparacion] = useState(opciones.length ? null : '')
   const [cantidad, setCantidad] = useState(1)
 
   const variante = variantes.find((v) => v.presentacion === presentacion)
   const precioUnidad = (variante?.precio || 0) + (preparacion === 'Frito' ? COSTO_FRITO : 0)
-  const listo = variante && preparacion
+  const listo = variante && preparacion != null
 
   function añadir() {
     if (!listo) return
@@ -27,7 +28,7 @@ export default function Ficha({ p, onAgregar, onCerrar }) {
   }
 
   const textoBoton = !variante ? 'Elige la bandeja'
-    : !preparacion ? `Elige ${preparacionesDe(p).join(' o ').toLowerCase()}`
+    : preparacion == null ? `Elige ${opciones.join(' o ').toLowerCase()}`
     : `Añadir al pedido · ${eur(precioUnidad * cantidad)}`
 
   return (
@@ -59,10 +60,10 @@ export default function Ficha({ p, onAgregar, onCerrar }) {
               </div>
             </div>
 
-            <div>
+            {opciones.length > 0 && <div>
               <span className="opt-label">¿Cómo lo quieres?</span>
               <div className="opt-row prep">
-                {preparacionesDe(p).map((op) => (
+                {opciones.map((op) => (
                   <button key={op} className={`prep-pick${op === preparacion ? ' on' : ''}${op === 'Frito' || op === 'Horneado' ? ' frito' : ''}`}
                     onClick={() => setPreparacion(op)}>
                     <b>{etiquetaPrep(op)}</b>
@@ -70,7 +71,7 @@ export default function Ficha({ p, onAgregar, onCerrar }) {
                   </button>
                 ))}
               </div>
-            </div>
+            </div>}
 
             <div>
               <span className="opt-label">Cantidad de bandejas</span>

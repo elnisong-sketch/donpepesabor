@@ -46,7 +46,7 @@ export function whatsappDe(telefono) {
 }
 
 const lineaProducto = (l) =>
-  `• ${l.nombre} — ${l.presentacion} · ${etiquetaPrep(l.preparacion)} (x${l.cantidad}) — ${eur(l.precio * l.cantidad)}`
+  `• ${l.nombre} — ${l.presentacion}${l.preparacion ? ' · ' + etiquetaPrep(l.preparacion) : ''} (x${l.cantidad}) — ${eur(l.precio * l.cantidad)}`
 
 /** Texto que recibe la tienda por WhatsApp (los asteriscos son negritas). */
 export function redactarMensaje(d, items, envio, distancia) {
@@ -88,7 +88,7 @@ export function registrarEnHoja(d, items, envio) {
     telefono: d.telefono.trim(),
     cp: domicilio ? d.cp.trim() : '',
     direccion: domicilio ? d.direccion.trim() : '',
-    productos: items.map((l) => `• ${l.nombre} (${l.presentacion}) x${l.cantidad} [${l.preparacion}]`).join('\n'),
+    productos: items.map((l) => `• ${l.nombre} (${l.presentacion}) x${l.cantidad}${l.preparacion ? ` [${l.preparacion}]` : ''}`).join('\n'),
     pago: d.formaPago,
     subtotal: t.productos.toFixed(2) + ' €',
     servicio: t.fritura.toFixed(2) + ' €',
