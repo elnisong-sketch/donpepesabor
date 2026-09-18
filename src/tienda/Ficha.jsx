@@ -64,7 +64,7 @@ export default function Ficha({ p, onAgregar, onCerrar }) {
               <span className="opt-label">¿Cómo lo quieres?</span>
               <div className="opt-row prep">
                 {opciones.map((op) => (
-                  <button key={op} className={`prep-pick${op === preparacion ? ' on' : ''}${op === 'Frito' || op === 'Horneado' ? ' frito' : ''}`}
+                  <button key={op} className={`prep-pick${op === preparacion ? ' on' : ''}${op === 'Frito' ? ' frito' : ''}`}
                     onClick={() => setPreparacion(op)}>
                     <b>{etiquetaPrep(op)}</b>
                     <small>{detallePrep(op)}{op === 'Frito' ? ` · +${eur(COSTO_FRITO)}` : ''}</small>
