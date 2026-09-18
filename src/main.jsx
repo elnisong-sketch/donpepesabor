@@ -1,18 +1,20 @@
-import { StrictMode, useEffect, useState } from 'react'
+import { StrictMode, Suspense, lazy, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth'
 import { auth } from './firebase.js'
 import './index.css'
-import AppModerno from './AppModerno.jsx'
-import AppRepartidor from './AppRepartidor.jsx'
-import PedidoPublico from './PedidoPublico.jsx'
+
+// Cada app se descarga solo cuando se usa: el cliente de la tienda no baja la gestión.
+const AppModerno    = lazy(() => import('./AppModerno.jsx'))
+const AppRepartidor = lazy(() => import('./AppRepartidor.jsx'))
+const Tienda        = lazy(() => import('./tienda/Tienda.jsx'))
 
 const NAVY   = "#1e3a5f";
 
 const hostname = window.location.hostname;
 const params   = new URLSearchParams(window.location.search);
 
-const esPublico     = hostname.includes("donpepesabor");
+const esPublico     = hostname.includes("donpepesabor") || params.has("tienda");
 const esRepartidor  = params.has("repartidor");
 
 function mensajeError(code) {
@@ -110,10 +112,10 @@ function ConSesion({ subtitulo, children }) {
 
 function Root() {
   if (esRepartidor) return <ConSesion subtitulo="Acceso repartidor"><AppRepartidor /></ConSesion>;
-  if (esPublico)    return <PedidoPublico />;
+  if (esPublico)    return <Tienda />;
   return <ConSesion subtitulo="Acceso a gestión interna"><AppModerno /></ConSesion>;
 }
 
 createRoot(document.getElementById('root')).render(
-  <StrictMode><Root /></StrictMode>
+  <StrictMode><Suspense fallback={null}><Root /></Suspense></StrictMode>
 )
