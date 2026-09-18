@@ -722,7 +722,7 @@ function ModuloInventario({ productos, setProductos }) {
   };
 
   const categorias = [...new Set(productos.map(p => p.categoria))];
-  const PRECIOS_RAPIDOS = [0, 5, 10, 15, 18, 20, 22, 25, 30, 35, 40];
+  const PRECIOS_RAPIDOS = [0, 5, 10, 12, 15, 18, 20, 21, 22, 25, 30, 35, 40];
 
   return (
     <div>
@@ -807,6 +807,10 @@ function ModuloInventario({ productos, setProductos }) {
                               borderRadius: 8, padding: "5px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer"
                             }}>{n}€</button>
                         ))}
+                        <input type="number" min="0" step="0.5" inputMode="decimal" placeholder="Otro €"
+                          style={{ width: 80, background: BG_INPUT, border: `1px solid ${ac}`, borderRadius: 8, color: TEXT_MAIN, padding: "5px 8px", fontSize: 12, fontWeight: 700 }}
+                          onKeyDown={e => { if (e.key === "Enter" && e.target.value !== "") { actualizarPrecio(prod.id, v.presentacion, e.target.value.replace(",", ".")); setEditandoPrecio(null); } }}
+                          onBlur={e => { if (e.target.value !== "") { actualizarPrecio(prod.id, v.presentacion, e.target.value.replace(",", ".")); setEditandoPrecio(null); } }} />
                       </div>
                     )}
                   </div>
