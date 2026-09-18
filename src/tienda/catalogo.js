@@ -67,12 +67,12 @@ const FOTOS = {
   p9: 'pastelito-mechada',
   p10: 'pastelito-jamon-y-queso',
   p11: 'pastelito-mechada-queso-amarillo',
-  p12: 'pastelito-pollo',
+  p12: 'pastelito-pollo-queso-amarillo',
   p13: 'empanadita-carne',
   p14: 'empanadita-pollo',
   p15: 'empanadita-carne-mechada',
   p16: 'empanadita-queso',
-  p17: 'empanadita-queso',
+  p17: 'empanadita-jamon-y-queso',
   p18: 'cachito-jamon-y-queso',
 }
 
