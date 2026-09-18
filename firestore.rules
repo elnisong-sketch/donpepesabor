@@ -1,0 +1,28 @@
+rules_version = '2';
+
+// BORRADOR — NO publicar hasta que el login esté desplegado y probado.
+// Se pega en: Consola de Firebase > Firestore Database > Reglas.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Solo estos correos pueden entrar. Cambia los de ejemplo por los reales.
+    function autorizado() {
+      return request.auth != null
+        && request.auth.token.email in [
+          'CORREO_GESTION@ejemplo.com',
+          'CORREO_REPARTIDOR@ejemplo.com'
+        ];
+    }
+
+    // La página pública solo necesita leer el catálogo.
+    match /datos/productos {
+      allow read: if true;
+      allow write: if autorizado();
+    }
+
+    // Todo lo demás: solo con sesión autorizada.
+    match /{document=**} {
+      allow read, write: if autorizado();
+    }
+  }
+}
