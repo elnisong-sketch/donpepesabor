@@ -710,8 +710,7 @@ function ModuloInventario({ productos, setProductos }) {
 
   // Pone el mismo stock en todas las bandejas de todos los productos, de una vez.
   const stockATodo = () => {
-    const txt = prompt("¿Cuántas bandejas pongo en stock a TODOS los productos?
-(se aplica a todas las presentaciones)", "10");
+    const txt = prompt("¿Cuántas bandejas pongo en stock a TODOS los productos? Se aplica a todas las presentaciones.", "10");
     if (txt === null) return;
     const n = parseInt(txt, 10);
     if (isNaN(n) || n < 0) { alert("Escribe un número, por ejemplo 10"); return; }
