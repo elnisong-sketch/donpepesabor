@@ -1659,7 +1659,7 @@ function ModuloProduccion({ producciones, setProducciones, trabajadoras, setTrab
 }
 
 // ─── APP PRINCIPAL (DISEÑO MODERNO) ─────────────────────────────────────────
-function ModuloAdmin({ proveedores, setProveedores, compras, setCompras, gastos, setGastos, ingredientes, setIngredientes, pedidos, producciones, trabajadoras, irInicio, exportarDatos, exportarExcel, cargarDemo, limpiarTodo }) {
+function ModuloAdmin({ proveedores, setProveedores, compras, setCompras, gastos, setGastos, ingredientes, setIngredientes, pedidos, producciones, trabajadoras, irInicio, exportarDatos, importarDatos, exportarExcel, cargarDemo, limpiarTodo }) {
   const [sub, setSub] = useState("proveedores");
   const [confirmDemo, setConfirmDemo] = useState(false);
   const ac = ACENTOS.admin;
@@ -1673,6 +1673,15 @@ function ModuloAdmin({ proveedores, setProveedores, compras, setCompras, gastos,
         color: "#fff", padding: "13px", fontSize: 15, fontWeight: 700,
         cursor: "pointer", marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "center", gap: 8
       }}>📤 Exportar Backup</button>
+      <label style={{
+        width: "100%", background: "#0ea5e9", borderRadius: 12,
+        color: "#fff", padding: "13px", fontSize: 15, fontWeight: 700,
+        cursor: "pointer", marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "center", gap: 8
+      }}>
+        📥 Restaurar copia
+        <input type="file" accept="application/json,.json" style={{ display: "none" }}
+          onChange={e => { const f = e.target.files?.[0]; if (f) importarDatos(f); e.target.value = ""; }} />
+      </label>
       <button onClick={exportarExcel} style={{
         width: "100%", background: "#217346", border: "none", borderRadius: 12,
         color: "#fff", padding: "13px", fontSize: 15, fontWeight: 700,
@@ -1957,6 +1966,38 @@ export default function AppModerno() {
     a.click();
   };
 
+  /**
+   * Restaura una copia hecha con "Exportar Backup".
+   *
+   * Solo toca las listas que vengan en el archivo, y avisa de cuántas filas entran:
+   * restaurar a ciegas es tan peligroso como perder los datos.
+   */
+  const importarDatos = (archivo) => {
+    const lector = new FileReader();
+    lector.onload = () => {
+      let d;
+      try { d = JSON.parse(lector.result); }
+      catch { alert("Ese archivo no es una copia válida."); return; }
+
+      const destinos = {
+        pedidos: setPedidos, clientes: setClientes, productos: setProductos,
+        proveedores: setProveedores, compras: setCompras, ingredientes: setIngredientes,
+        gastos: setGastos, repartidores: setRepartidores, producciones: setProducciones,
+        trabajadoras: setTrabajadoras,
+      };
+      const entran = Object.keys(destinos).filter(k => Array.isArray(d[k]));
+      if (!entran.length) { alert("El archivo no contiene datos reconocibles."); return; }
+
+      const resumen = entran.map(k => `· ${k}: ${d[k].length}`).join(" | ");
+      const fecha = d.exportado ? new Date(d.exportado).toLocaleString("es-ES") : "fecha desconocida";
+      if (!confirm(`Copia del ${fecha}. Se sustituirá lo que hay ahora por: ${resumen}. ¿Continuar?`)) return;
+
+      entran.forEach(k => { destinos[k](d[k]); sync(k, d[k]); });
+      alert("Copia restaurada.");
+    };
+    lector.readAsText(archivo);
+  };
+
   const exportarExcel = async () => {
     const XLSX = await import("xlsx");
     const wb = XLSX.utils.book_new();
@@ -2075,7 +2116,7 @@ export default function AppModerno() {
         {tab === "stock" && <ModuloStock productos={productos} />}
         {tab === "produccion" && <ModuloProduccion producciones={producciones} setProducciones={setProducciones} trabajadoras={trabajadoras} setTrabajadoras={setTrabajadoras} productos={productos} setProductos={setProductos} />}
         {tab === "personal" && <ModuloPersonal repartidores={repartidores} setRepartidores={setRepartidores} trabajadoras={trabajadoras} setTrabajadoras={setTrabajadoras} />}
-        {tab === "admin" && <ModuloAdmin proveedores={proveedores} setProveedores={setProveedores} compras={compras} setCompras={setCompras} gastos={gastos} setGastos={setGastos} ingredientes={ingredientes} setIngredientes={setIngredientes} pedidos={pedidos} producciones={producciones} trabajadoras={trabajadoras} exportarDatos={exportarDatos} exportarExcel={exportarExcel} cargarDemo={cargarDemo} limpiarTodo={limpiarTodo} />}
+        {tab === "admin" && <ModuloAdmin proveedores={proveedores} setProveedores={setProveedores} compras={compras} setCompras={setCompras} gastos={gastos} setGastos={setGastos} ingredientes={ingredientes} setIngredientes={setIngredientes} pedidos={pedidos} producciones={producciones} trabajadoras={trabajadoras} exportarDatos={exportarDatos} importarDatos={importarDatos} exportarExcel={exportarExcel} cargarDemo={cargarDemo} limpiarTodo={limpiarTodo} />}
       </div>
 
       {/* Navegación inferior */}
