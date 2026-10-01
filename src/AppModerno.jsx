@@ -708,6 +708,20 @@ function ModuloInventario({ productos, setProductos }) {
       : p));
   };
 
+  // Pone el mismo stock en todas las bandejas de todos los productos, de una vez.
+  const stockATodo = () => {
+    const txt = prompt("¿Cuántas bandejas pongo en stock a TODOS los productos?
+(se aplica a todas las presentaciones)", "10");
+    if (txt === null) return;
+    const n = parseInt(txt, 10);
+    if (isNaN(n) || n < 0) { alert("Escribe un número, por ejemplo 10"); return; }
+    const bandejas = productos.reduce((t, p) => t + p.variantes.length, 0);
+    if (!confirm(`Se pondrá stock ${n} en ${bandejas} bandejas de ${productos.length} productos.
+
+Esto sustituye el stock actual. ¿Continuar?`)) return;
+    setProductos(ps => ps.map(p => ({ ...p, variantes: p.variantes.map(v => ({ ...v, stock: n })) })));
+  };
+
   const crearProducto = () => {
     if (!formProd.nombre.trim()) return;
     const nuevo = { id: generarId(), nombre: formProd.nombre.trim(), categoria: formProd.categoria, variantes: [] };
@@ -749,7 +763,10 @@ function ModuloInventario({ productos, setProductos }) {
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <h2 style={{ color: ac, margin: 0 }}>📊 Inventario & Precios</h2>
-        <Btn accent={ac} onClick={() => setModalProd(true)}>+ Nuevo Producto</Btn>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Btn variant="secondary" onClick={stockATodo}>📦 Stock a todo</Btn>
+          <Btn accent={ac} onClick={() => setModalProd(true)}>+ Nuevo Producto</Btn>
+        </div>
       </div>
 
       {productos.length === 0 && <Empty texto="No hay productos. Crea el primero con + Nuevo Producto." />}
