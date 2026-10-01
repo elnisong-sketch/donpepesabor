@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { db } from "./firebase";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
+import { CATALOGO_RESPALDO } from "./catalogoRespaldo.js";
 
 // ─── DATOS INICIALES (idénticos a App.jsx) ──────────────────────────────────
 const PRODUCTOS_INICIALES = [];
@@ -708,6 +709,15 @@ function ModuloInventario({ productos, setProductos }) {
       : p));
   };
 
+  // Vuelve al catálogo de respaldo (los 19 productos con sus precios).
+  const restaurarCatalogo = () => {
+    if (!confirm(`Se sustituirán los ${productos.length} productos actuales por los ${CATALOGO_RESPALDO.length} del respaldo, con sus precios.
+
+¿Continuar?`)) return;
+    setProductos(CATALOGO_RESPALDO.map(p => ({ ...p, variantes: p.variantes.map(v => ({ ...v })) })));
+    alert("Catálogo restaurado. Revisa precios y stock antes de seguir.");
+  };
+
   // Pone el mismo stock en todas las bandejas de todos los productos, de una vez.
   const stockATodo = () => {
     const txt = prompt("¿Cuántas bandejas pongo en stock a TODOS los productos? Se aplica a todas las presentaciones.", "10");
@@ -763,6 +773,7 @@ Esto sustituye el stock actual. ¿Continuar?`)) return;
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <h2 style={{ color: ac, margin: 0 }}>📊 Inventario & Precios</h2>
         <div style={{ display: "flex", gap: 8 }}>
+          <Btn variant="secondary" onClick={restaurarCatalogo}>♻️ Restaurar catálogo</Btn>
           <Btn variant="secondary" onClick={stockATodo}>📦 Stock a todo</Btn>
           <Btn accent={ac} onClick={() => setModalProd(true)}>+ Nuevo Producto</Btn>
         </div>
@@ -1863,17 +1874,41 @@ export default function AppModerno() {
   useEffect(() => { if (listo) sync("producciones", producciones); }, [JSON.stringify(producciones)]);
   useEffect(() => { if (listo) sync("trabajadoras", trabajadoras); }, [JSON.stringify(trabajadoras)]);
 
-  // Escuchar cambios de pedidos desde Firebase en tiempo real
+  /**
+   * Primero se LEE la nube, y solo después se escribe.
+   *
+   * Antes solo se escuchaban los pedidos: el resto (productos, clientes, gastos…) se
+   * cargaba de este navegador y se subía encima de la nube. Un dispositivo con datos
+   * viejos bastaba para borrar el catálogo entero, y pasó el 01/10/2026. Hasta que
+   * todas las colecciones han contestado no se sube nada (`listo`).
+   */
   useEffect(() => {
-    const unsub = onSnapshot(doc(db, "datos", "pedidos"), (snap) => {
-      if (snap.exists()) {
-        const data = JSON.parse(snap.data().valor);
-        setPedidos(data);
-        try { localStorage.setItem("pedidos", JSON.stringify(data)); } catch {}
-      }
-      setListo(true);
-    }, () => setListo(true));
-    return () => unsub();
+    const destinos = {
+      pedidos: setPedidos, clientes: setClientes, productos: setProductos,
+      proveedores: setProveedores, compras: setCompras, ingredientes: setIngredientes,
+      gastos: setGastos, repartidores: setRepartidores, producciones: setProducciones,
+      trabajadoras: setTrabajadoras,
+    };
+    const claves = Object.keys(destinos);
+    let faltan = claves.length;
+    const unaMenos = () => { if (--faltan <= 0) setListo(true); };
+
+    const subs = claves.map((clave, i) => {
+      let primera = true;
+      return onSnapshot(doc(db, "datos", clave), (snap) => {
+        if (snap.exists()) {
+          try {
+            const data = JSON.parse(snap.data().valor);
+            destinos[clave](data);
+            localStorage.setItem(clave, JSON.stringify(data));
+          } catch {}
+        }
+        if (primera) { primera = false; unaMenos(); }
+      }, () => { if (primera) { primera = false; unaMenos(); } });
+    });
+    // Si la red no contesta, se desbloquea igualmente para poder seguir trabajando.
+    const red = setTimeout(() => setListo(true), 8000);
+    return () => { clearTimeout(red); subs.forEach(u => u()); };
   }, []);
 
   const ac = ACENTOS[tab] || ACENTOS.pedidos;
