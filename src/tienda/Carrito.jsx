@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { COSTO_FRITO, DIRECCION_LOCAL, PAGOS, PREFIJOS, etiquetaPrep, eur, unidades } from './catalogo.js'
 import { TARIFA_BASE, TEXTO_TARIFAS, calcularEnvio } from './envio.js'
 import {
-  conPlazo, hoyLocal, irAWhatsapp, nuevoCodigo, redactarMensaje, registrarEnHoja, totalesDe,
+  conPlazo, fechaLegible, fechaMinima, hoyLocal, irAWhatsapp, nuevoCodigo, redactarMensaje, registrarEnHoja, totalesDe,
 } from './pedido.js'
 
 export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
@@ -37,6 +37,12 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
   const cifrasTel = tel.replace(/\D/g, '').length
   const telOk = datos.prefijo === '34' && !/^(\+|00)/.test(tel) ? cifrasTel === 9 : cifrasTel >= 6
 
+  // Con productos por encargo, el primer día posible se mueve adelante.
+  const minFecha = fechaMinima(carrito)
+  useEffect(() => {
+    if (datos.fechaEntrega < minFecha) setDatos((d) => ({ ...d, fechaEntrega: minFecha }))
+  }, [minFecha, datos.fechaEntrega])
+
   const envio = domicilio ? (distancia?.tarifa ?? TARIFA_BASE) : 0
   const t = totalesDe(carrito, envio)
   const bandejas = carrito.reduce((s, l) => s + l.cantidad, 0)
@@ -44,6 +50,7 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
   const falta = useMemo(() => {
     if (!carrito.length) return 'Añade al menos un producto'
     if (!datos.fechaEntrega) return 'Elige el día de entrega'
+    if (datos.fechaEntrega < minFecha) return 'Hay productos por encargo: elige un día más adelante'
     if (!datos.horaDesde || !datos.horaHasta) return 'Indica la franja horaria'
     if (datos.horaHasta <= datos.horaDesde) return 'La hora final debe ser posterior a la inicial'
     if (!datos.nombre.trim()) return 'Escribe tu nombre'
@@ -54,7 +61,7 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
     if (domicilio && !cpMadrid) return 'Solo repartimos en Madrid (código postal 28xxx)'
     if (!datos.formaPago) return 'Elige la forma de pago'
     return ''
-  }, [carrito.length, datos, domicilio, cpMadrid, tel, telOk])
+  }, [carrito.length, datos, domicilio, cpMadrid, tel, telOk, minFecha])
 
   const mensaje = useMemo(
     () => redactarMensaje({ ...datos, telefono: telefonoCompleto, codigo }, carrito, envio, distancia),
@@ -136,7 +143,10 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
                 <h4>¿Cuándo?</h4>
                 <div className="field">
                   <label htmlFor="fFecha">Día</label>
-                  <input id="fFecha" type="date" min={hoyLocal()} value={datos.fechaEntrega} onChange={cambiar('fechaEntrega')} />
+                  <input id="fFecha" type="date" min={minFecha} value={datos.fechaEntrega} onChange={cambiar('fechaEntrega')} />
+                  {minFecha > hoyLocal() && (
+                    <span className="hint">Llevas productos por encargo: el primer día posible es el {fechaLegible(minFecha)}.</span>
+                  )}
                 </div>
                 <div className="field">
                   <label>Franja horaria</label>

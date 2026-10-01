@@ -23,6 +23,14 @@ export function fechaLegible(iso) {
   return `${dia} ${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}`
 }
 
+/** Primer día en que se puede entregar el carrito, según los productos por encargo. */
+export function fechaMinima(items) {
+  const horas = Math.max(0, ...items.map((l) => l.horasEncargo || 0))
+  const d = new Date()
+  d.setDate(d.getDate() + Math.ceil(horas / 24))
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 export function totalesDe(items, envio) {
   const productos = items.reduce((s, l) => s + l.precio * l.cantidad, 0)
   const bandejasFritas = items.filter((l) => l.preparacion === 'Frito').reduce((s, l) => s + l.cantidad, 0)

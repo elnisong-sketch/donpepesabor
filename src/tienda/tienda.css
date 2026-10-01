@@ -105,6 +105,17 @@
 .dps .card-add{margin-top:auto;background:var(--brown-800);color:#fff;border-radius:9px;padding:11px;font-family:var(--f-display);font-size:12.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;transition:background .16s}
 .dps .card-add:hover{background:var(--vino)}
 
+/* etiquetas de disponibilidad */
+.dps .card-img{position:relative}
+.dps .cinta{position:absolute;top:10px;left:10px;background:var(--gold);color:var(--brown-900);font-family:var(--f-display);font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:5px 10px;border-radius:6px;box-shadow:0 4px 12px rgba(42,18,0,.25)}
+.dps .cinta.no{background:var(--ink-soft);color:#fff}
+.dps .card.agotado .card-img img{filter:grayscale(1);opacity:.55}
+.dps .card.agotado .card-add{background:var(--cream-2);color:var(--ink-faint);cursor:not-allowed}
+.dps .card-img:disabled{cursor:default}
+.dps .size-pick:disabled{color:var(--ink-faint);background:var(--cream);cursor:not-allowed;text-decoration:line-through;border-style:dashed}
+.dps .size-pick:disabled small{text-decoration:none;color:var(--warn)}
+.dps .aviso-encargo{margin:0;background:#fff7e6;border:1px solid #f3dcae;color:#7a5410;border-radius:10px;padding:9px 12px;font-size:12.5px;font-weight:600}
+
 /* cómo pedir */
 .dps .pasos{background:var(--paper);padding:44px 0;scroll-margin-top:80px}
 .dps .pasos ol{list-style:none;margin:24px 0 0;padding:0;display:grid;grid-template-columns:repeat(3,1fr);gap:18px;counter-reset:paso}

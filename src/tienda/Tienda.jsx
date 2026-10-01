@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '../firebase.js'
-import { DIRECCION_LOCAL, eur, fotoDe, precioDesde, unidades } from './catalogo.js'
+import { DIRECCION_LOCAL, estadoProducto, eur, fotoDe, precioDesde, unidades } from './catalogo.js'
 import { totalesDe } from './pedido.js'
 import Ficha from './Ficha.jsx'
 import Carrito from './Carrito.jsx'
@@ -221,10 +221,12 @@ function Sello({ titulo, pie }) {
 
 function Tarjeta({ p, onAbrir }) {
   const varias = (p.variantes || []).length > 1
+  const estado = estadoProducto(p)
   return (
-    <article className="card">
-      <button className="card-img" onClick={onAbrir} aria-label={`Ver ${p.nombre}`}>
+    <article className={`card${estado.agotado ? ' agotado' : ''}`}>
+      <button className="card-img" onClick={onAbrir} aria-label={`Ver ${p.nombre}`} disabled={estado.agotado}>
         <img src={fotoDe(p)} alt={p.nombre} loading="lazy" />
+        {estado.texto && <span className={`cinta${estado.agotado ? ' no' : ''}`}>{estado.texto}</span>}
       </button>
       <div className="card-body">
         <div className="card-ref">{p.categoria}</div>
@@ -236,7 +238,9 @@ function Tarjeta({ p, onAbrir }) {
         <div className="sizes">
           {(p.variantes || []).map((v) => <span key={v.presentacion} className="size-chip">{unidades(v.presentacion)}</span>)}
         </div>
-        <button className="card-add" onClick={onAbrir}>Añadir al pedido</button>
+        <button className="card-add" onClick={onAbrir} disabled={estado.agotado}>
+          {estado.agotado ? 'Agotado' : 'Añadir al pedido'}
+        </button>
       </div>
     </article>
   )

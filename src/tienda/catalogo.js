@@ -49,6 +49,28 @@ export const PREFIJOS = [
   ['49', '🇩🇪', 'Alemania'],
 ]
 
+/**
+ * Disponibilidad de una bandeja, tal como la ve el cliente.
+ * Solo cuenta la etiqueta que pone el dueño en Inventario. El stock NO se mira:
+ * hoy está a 0 en todos los productos y la tienda entera saldría agotada.
+ */
+export function estadoDe(variante) {
+  const etiqueta = variante?.etiqueta || ''
+  if (etiqueta === 'agotado') return { agotada: true, horas: 0, texto: 'Agotada' }
+  if (etiqueta === '24h') return { agotada: false, horas: 24, texto: 'Por encargo · 24 h' }
+  if (etiqueta === '48h') return { agotada: false, horas: 48, texto: 'Por encargo · 48 h' }
+  return { agotada: false, horas: 0, texto: '' }
+}
+
+/** Resumen del producto entero para la tarjeta del catálogo. */
+export function estadoProducto(p) {
+  const estados = (p.variantes || []).map(estadoDe)
+  const aLaVenta = estados.filter((e) => !e.agotada)
+  if (!aLaVenta.length) return { agotado: true, texto: 'Agotado' }
+  const horas = Math.min(...aLaVenta.map((e) => e.horas))
+  return { agotado: false, texto: horas ? `Por encargo · ${horas} h` : '' }
+}
+
 export const eur = (n) =>
   Number(n || 0).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })
 

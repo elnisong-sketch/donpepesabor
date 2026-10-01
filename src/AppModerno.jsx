@@ -669,6 +669,15 @@ function ModuloClientes({ clientes, setClientes, pedidos, irInicio }) {
 }
 
 // ─── MÓDULO: INVENTARIO ──────────────────────────────────────────────────────
+
+// Cómo se muestra cada bandeja en la tienda pública. "" = normal.
+// Solo cuenta lo que se marque aquí: el stock no se usa todavía (está a 0 en todo).
+const ETIQUETAS_WEB = [
+  { valor: "",      texto: "A la venta",   color: "#10b981", ayuda: "Se puede pedir para hoy mismo" },
+  { valor: "24h",   texto: "Encargo 24 h", color: "#f59e0b", ayuda: "En la web solo se podrá pedir para mañana en adelante" },
+  { valor: "48h",   texto: "Encargo 48 h", color: "#f97316", ayuda: "En la web solo se podrá pedir con dos días de antelación" },
+  { valor: "agotado", texto: "Agotado",    color: "#ef4444", ayuda: "Se ve en la tienda pero no se puede pedir" },
+];
 const CATEGORIAS_PRODUCTO = ["Tequeños", "Empanadas", "Pastelitos", "Otros"];
 
 // Extrae el número de unidades de una presentación (ej: "Bandeja 25" → 25, "Bandeja 50" → 50, "Unidad" → 1)
@@ -691,6 +700,12 @@ function ModuloInventario({ productos, setProductos }) {
   };
   const actualizarStock = (prodId, presentacion, stock) => {
     setProductos(ps => ps.map(p => p.id === prodId ? { ...p, variantes: p.variantes.map(v => v.presentacion === presentacion ? { ...v, stock: parseInt(stock) || 0 } : v) } : p));
+  };
+
+  const actualizarEtiqueta = (prodId, presentacion, etiqueta) => {
+    setProductos(ps => ps.map(p => p.id === prodId
+      ? { ...p, variantes: p.variantes.map(v => v.presentacion === presentacion ? { ...v, etiqueta } : v) }
+      : p));
   };
 
   const crearProducto = () => {
@@ -806,6 +821,20 @@ function ModuloInventario({ productos, setProductos }) {
                           </span>
                         </div>
                       </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                      {ETIQUETAS_WEB.map(e => {
+                        const actual = (v.etiqueta || "") === e.valor;
+                        return (
+                          <button key={e.valor || "ok"} onClick={() => actualizarEtiqueta(prod.id, v.presentacion, e.valor)}
+                            title={e.ayuda}
+                            style={{
+                              border: actual ? `1.5px solid ${e.color}` : `1px solid ${BORDER}`,
+                              background: actual ? e.color : BG_INPUT, color: actual ? "#fff" : TEXT_SUB,
+                              borderRadius: 8, padding: "4px 9px", fontSize: 11, fontWeight: 700, cursor: "pointer"
+                            }}>{e.texto}</button>
+                        );
+                      })}
                     </div>
                     {editandoPrecio === claveP && (
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4 }}>

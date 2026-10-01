@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { COSTO_FRITO, detallePrep, etiquetaPrep, eur, fotoDe, preparacionesDe, unidades } from './catalogo.js'
+import { COSTO_FRITO, detallePrep, estadoDe, etiquetaPrep, eur, fotoDe, preparacionesDe, unidades } from './catalogo.js'
 
 /** Ficha del producto: aquí se elige la bandeja, congelado o frito, y la cantidad. */
 export default function Ficha({ p, onAgregar, onCerrar }) {
   const variantes = p.variantes || []
-  const [presentacion, setPresentacion] = useState(variantes.length === 1 ? variantes[0].presentacion : null)
+  const disponibles = variantes.filter((v) => !estadoDe(v).agotada)
+  const [presentacion, setPresentacion] = useState(disponibles.length === 1 ? disponibles[0].presentacion : null)
   const opciones = preparacionesDe(p)
   const [preparacion, setPreparacion] = useState(opciones.length ? null : '')
   const [cantidad, setCantidad] = useState(1)
@@ -23,6 +24,7 @@ export default function Ficha({ p, onAgregar, onCerrar }) {
       presentacion,
       preparacion,
       precio: variante.precio,
+      horasEncargo: estadoDe(variante).horas,
       cantidad,
     })
   }
@@ -53,12 +55,18 @@ export default function Ficha({ p, onAgregar, onCerrar }) {
               <div className="opt-row">
                 {variantes.map((v) => (
                   <button key={v.presentacion} className={`size-pick${v.presentacion === presentacion ? ' on' : ''}`}
-                    onClick={() => setPresentacion(v.presentacion)}>
-                    {unidades(v.presentacion)} <small>{eur(v.precio)}</small>
+                    disabled={estadoDe(v).agotada} onClick={() => setPresentacion(v.presentacion)}>
+                    {unidades(v.presentacion)} <small>{estadoDe(v).agotada ? 'Agotada' : eur(v.precio)}</small>
                   </button>
                 ))}
               </div>
             </div>
+
+            {variante && estadoDe(variante).horas > 0 && (
+              <p className="aviso-encargo">
+                ⏳ Esta bandeja es por encargo: la entrega más temprana es {estadoDe(variante).horas === 24 ? 'mañana' : 'dentro de dos días'}.
+              </p>
+            )}
 
             {opciones.length > 0 && <div>
               <span className="opt-label">¿Cómo lo quieres?</span>
