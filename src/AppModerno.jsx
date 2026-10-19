@@ -330,6 +330,93 @@ function lineaFactura(it) {
   return `Bandeja ${it.nombreProducto} ${numero} - ${sufijo}`;
 }
 
+// ─── TICKET DE 80 mm PARA IMPRESORA TÉRMICA ─────────────────────────────────
+// Es un comprobante del pedido, NO una factura: la factura legal la emite el TPV.
+const TICKET_ANCHO_MM = 80;
+
+function TicketPedido({ pedido, repartidores, onCerrar }) {
+  const ac = ACENTOS.pedidos;
+  const envio = parseFloat(pedido.envio) || 0;
+  const servicio = parseFloat(pedido.servicio) || 0;
+  const productos = (pedido.items || []).reduce((t, it) => t + (it.subtotal || 0), 0);
+  const total = pedido.total || productos + envio + servicio;
+  const repartidor = repartidores?.find(r => r.id === pedido.repartidorId)?.nombre;
+  const domicilio = pedido.tipoEntrega === "Domicilio";
+  const euros = n => (n || 0).toFixed(2) + " EUR";
+
+  const Fila = ({ izq, der, fuerte }) => (
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontWeight: fuerte ? 700 : 400 }}>
+      <span>{izq}</span><span>{der}</span>
+    </div>
+  );
+  const Raya = () => <div style={{ borderTop: "1px dashed #000", margin: "6px 0" }} />;
+
+  return (
+    <Modal title="🖨️ Ticket del pedido" accent={ac} onClose={onCerrar}>
+      <style>{`
+        @media print {
+          body * { visibility: hidden !important; }
+          #ticket-imprimible, #ticket-imprimible * { visibility: visible !important; }
+          #ticket-imprimible {
+            position: absolute; left: 0; top: 0;
+            width: ${TICKET_ANCHO_MM - 8}mm; padding: 0; margin: 0;
+            color: #000; background: #fff;
+          }
+          @page { size: ${TICKET_ANCHO_MM}mm auto; margin: 4mm; }
+        }
+      `}</style>
+
+      <div id="ticket-imprimible" style={{
+        background: "#fff", color: "#000", width: 300, margin: "0 auto",
+        fontFamily: "'Courier New', monospace", fontSize: 12.5, lineHeight: 1.45, padding: 10
+      }}>
+        <div style={{ textAlign: "center", fontWeight: 700, fontSize: 15 }}>DON PEPE SABOR</div>
+        <div style={{ textAlign: "center", fontSize: 11 }}>Calle Berrocal 56, 28021 Madrid</div>
+        <div style={{ textAlign: "center", fontSize: 11 }}>WhatsApp 604 136 371</div>
+        <Raya />
+        <div style={{ textAlign: "center", fontSize: 11 }}>COMPROBANTE DE PEDIDO</div>
+        <div style={{ textAlign: "center", fontSize: 10 }}>(no es una factura)</div>
+        <Raya />
+        <Fila izq="Pedido" der={String(pedido.id).replace(/^web-/, "W")} />
+        <Fila izq="Entrega" der={`${pedido.fecha || ""} ${pedido.rangoHorario || ""}`.trim()} />
+        <Fila izq="Cliente" der={pedido.nombre || "-"} />
+        <Fila izq="Telefono" der={pedido.telefono || "-"} />
+        {domicilio
+          ? <div style={{ marginTop: 2 }}>Direccion: {pedido.direccion} {pedido.cp}</div>
+          : <div style={{ marginTop: 2 }}>RECOGIDA EN TIENDA</div>}
+        {repartidor && <Fila izq="Reparto" der={repartidor} />}
+        <Raya />
+        {(pedido.items || []).map((it, i) => (
+          <div key={i} style={{ marginBottom: 4 }}>
+            <div>{it.cantidad}x {it.nombreProducto}</div>
+            <Fila izq={`   ${it.presentacion} · ${it.estado || ""}`} der={euros(it.subtotal)} />
+          </div>
+        ))}
+        <Raya />
+        <Fila izq="Productos" der={euros(productos)} />
+        {servicio > 0 && <Fila izq="Fritura" der={euros(servicio)} />}
+        {envio > 0 && <Fila izq="Envio" der={euros(envio)} />}
+        <div style={{ borderTop: "1px solid #000", margin: "6px 0" }} />
+        <Fila izq="TOTAL" der={euros(total)} fuerte />
+        <Fila izq="Pago" der={pedido.formaPago || "-"} />
+        {pedido.notas && <div style={{ marginTop: 6, fontSize: 11 }}>Nota: {pedido.notas}</div>}
+        <Raya />
+        <div style={{ textAlign: "center", fontSize: 11 }}>Gracias por tu pedido</div>
+        <div style={{ textAlign: "center", fontSize: 11 }}>donpepesabor-tienda.web.app</div>
+        <div style={{ height: 24 }} />
+      </div>
+
+      <p style={{ color: TEXT_SUB, fontSize: 12, margin: "12px 0 0" }}>
+        Al imprimir, elige la impresora térmica y pon los márgenes en "ninguno".
+      </p>
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
+        <Btn variant="secondary" onClick={onCerrar}>Cerrar</Btn>
+        <Btn accent={ac} onClick={() => window.print()}>🖨️ Imprimir</Btn>
+      </div>
+    </Modal>
+  );
+}
+
 function FacturaPedido({ pedido, onCerrar }) {
   const ac = ACENTOS.pedidos;
   const envio = parseFloat(pedido.envio) || 0;
@@ -370,6 +457,7 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
   const [modal, setModal] = useState(false);
   const [editar, setEditar] = useState(null);
   const [facturaPedido, setFacturaPedido] = useState(null);
+  const [ticketPedido, setTicketPedido] = useState(null);
   const [filtroEstado, setFiltroEstado] = useState("Todos");
   const [filtroFecha, setFiltroFecha] = useState("");
 
@@ -437,6 +525,7 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
               <div style={{ display: "flex", gap: 6 }}>
                 <Btn small variant="secondary" onClick={() => { setEditar(p); setModal(true); }}>✏️</Btn>
                 <Btn small variant="success" onClick={() => setFacturaPedido(p)}>🧾</Btn>
+                <Btn small variant="secondary" onClick={() => setTicketPedido(p)}>🖨️</Btn>
                 <Btn small variant="danger" onClick={() => eliminar(p.id)}>🗑️</Btn>
               </div>
             </div>
@@ -452,6 +541,7 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
           onGuardar={guardar} onCerrar={() => { setModal(false); setEditar(null); }} pedidoEditar={editar} />
       )}
       {facturaPedido && <FacturaPedido pedido={facturaPedido} onCerrar={() => setFacturaPedido(null)} />}
+      {ticketPedido && <TicketPedido pedido={ticketPedido} repartidores={repartidores} onCerrar={() => setTicketPedido(null)} />}
 
       {estadoPendiente && (
         <Modal title="Confirmar cambio de estado" accent={ac} onClose={() => setEstadoPendiente(null)}>
