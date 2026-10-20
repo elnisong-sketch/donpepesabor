@@ -471,6 +471,7 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
   const [editar, setEditar] = useState(null);
   const [facturaPedido, setFacturaPedido] = useState(null);
   const [ticketPedido, setTicketPedido] = useState(null);
+  const [expandido, setExpandido] = useState(null);   // id del pedido abierto
   const [filtroEstado, setFiltroEstado] = useState("Todos");
   const [filtroFecha, setFiltroFecha] = useState("");
 
@@ -526,7 +527,7 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
 
       {filtrados.length === 0 ? <Empty texto="No hay pedidos con estos filtros" /> : Object.entries(porFecha).map(([dia, delDia]) => (
         <div key={dia}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "18px 0 10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "16px 0 8px" }}>
             <span style={{ color: ac, fontWeight: 900, fontSize: 14 }}>{etiquetaDia(dia)}</span>
             <span style={{ color: TEXT_SUB, fontSize: 12 }}>{delDia.length} pedido{delDia.length > 1 ? "s" : ""}</span>
             <span style={{ flex: 1, height: 1, background: BORDER }} />
@@ -534,39 +535,62 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
               {delDia.reduce((t, x) => t + (x.total || 0), 0).toFixed(2)}€
             </span>
           </div>
-          {delDia.map(p => (
-        <Card key={p.id} accent={ESTADO_COLORS[p.estado]}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 8 }}>
-            <div>
-              <p style={{ color: TEXT_MAIN, fontWeight: 800, margin: "0 0 4px" }}>{p.nombre}</p>
-              <p style={{ color: TEXT_SUB, fontSize: 13, margin: "0 0 4px" }}>📞 {p.telefono}</p>
-              {p.tipoEntrega === "Domicilio" && <p style={{ color: TEXT_SUB, fontSize: 13, margin: "0 0 4px" }}>📍 {p.direccion} {p.cp}</p>}
-              <p style={{ color: TEXT_SUB, fontSize: 13, margin: "0 0 4px" }}>📅 {p.fecha} {p.rangoHorario && `· ⏰ ${p.rangoHorario}`}</p>
-              <p style={{ color: TEXT_SUB, fontSize: 13, margin: "0 0 6px" }}>💳 {p.formaPago} · {p.tipoEntrega}</p>
-              {p.items?.map((it, i) => (
-                <span key={i} style={{ fontSize: 12, background: BORDER, borderRadius: 8, padding: "3px 9px", marginRight: 4, marginBottom: 4, display: "inline-block", color: TEXT_MAIN }}>
-                  {it.cantidad}x {it.nombreProducto} {it.presentacion} ({it.estado})
-                </span>
-              ))}
-              {(parseFloat(p.envio) || 0) > 0 && <p style={{ color: "#666", fontSize: 12, margin: "4px 0 0" }}>🚴 Envío: {(parseFloat(p.envio) || 0).toFixed(2)}€</p>}
-              <p style={{ color: "#666", fontSize: 12, margin: "4px 0 0" }}>🛵 {repartidores.find(r => r.id === p.repartidorId)?.nombre || "Recoger en Tienda"}</p>
-              {p.total > 0 && <p style={{ color: ac, fontWeight: 800, margin: "6px 0 0", fontSize: 15 }}>Total: {p.total.toFixed(2)}€</p>}
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
-              <Badge estado={p.estado} />
-              <div style={{ display: "flex", gap: 6 }}>
-                <Btn small variant="secondary" onClick={() => { setEditar(p); setModal(true); }}>✏️</Btn>
-                <Btn small variant="success" onClick={() => setFacturaPedido(p)}>🧾</Btn>
-                <Btn small variant="secondary" onClick={() => setTicketPedido(p)}>🖨️</Btn>
-                <Btn small variant="danger" onClick={() => eliminar(p.id)}>🗑️</Btn>
+          {delDia.map(p => {
+            const abierto = expandido === p.id;
+            const unidades = (p.items || []).reduce((t, it) => t + (Number(it.cantidad) || 0), 0);
+            return (
+            <Card key={p.id} accent={ESTADO_COLORS[p.estado]}
+              style={abierto ? { marginBottom: 12 } : { padding: "10px 14px", marginBottom: 6 }}>
+              {/* Fila resumida: siempre visible. Al pulsarla se despliega el detalle. */}
+              <div onClick={() => setExpandido(abierto ? null : p.id)}
+                style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+                <span style={{ color: TEXT_SUB, fontSize: 13, width: 14 }}>{abierto ? "▾" : "▸"}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ color: TEXT_MAIN, fontWeight: 800, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {p.tipoEntrega === "Recogida" ? "🏪" : "🚚"} {p.nombre}
+                  </p>
+                  <p style={{ color: TEXT_SUB, fontSize: 12.5, margin: "2px 0 0" }}>
+                    {p.rangoHorario ? `⏰ ${p.rangoHorario}` : "Sin hora"} · {unidades} bandeja{unidades === 1 ? "" : "s"}
+                  </p>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  {p.total > 0 && <p style={{ color: ac, fontWeight: 800, margin: "0 0 4px", fontSize: 15 }}>{p.total.toFixed(2)}€</p>}
+                  <Badge estado={p.estado} />
+                </div>
               </div>
-            </div>
-          </div>
-          <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #25262f" }}>
-            <Chips accent={ESTADO_COLORS[p.estado]} options={ESTADOS_PEDIDO} value={p.estado} onChange={v => cambiarEstado(p.id, v)} />
-          </div>
-        </Card>
-          ))}
+
+              {abierto && (
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${BORDER}` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 8 }}>
+                    <div>
+                      <p style={{ color: TEXT_SUB, fontSize: 13, margin: "0 0 4px" }}>📞 {p.telefono}</p>
+                      {p.tipoEntrega === "Domicilio" && <p style={{ color: TEXT_SUB, fontSize: 13, margin: "0 0 4px" }}>📍 {p.direccion} {p.cp}</p>}
+                      <p style={{ color: TEXT_SUB, fontSize: 13, margin: "0 0 4px" }}>📅 {p.fecha} {p.rangoHorario && `· ⏰ ${p.rangoHorario}`}</p>
+                      <p style={{ color: TEXT_SUB, fontSize: 13, margin: "0 0 6px" }}>💳 {p.formaPago} · {p.tipoEntrega}</p>
+                      {p.items?.map((it, i) => (
+                        <span key={i} style={{ fontSize: 12, background: BORDER, borderRadius: 8, padding: "3px 9px", marginRight: 4, marginBottom: 4, display: "inline-block", color: TEXT_MAIN }}>
+                          {it.cantidad}x {it.nombreProducto} {it.presentacion} ({it.estado})
+                        </span>
+                      ))}
+                      {(parseFloat(p.envio) || 0) > 0 && <p style={{ color: "#666", fontSize: 12, margin: "4px 0 0" }}>🚴 Envío: {(parseFloat(p.envio) || 0).toFixed(2)}€</p>}
+                      <p style={{ color: "#666", fontSize: 12, margin: "4px 0 0" }}>🛵 {repartidores.find(r => r.id === p.repartidorId)?.nombre || "Recoger en Tienda"}</p>
+                      {p.total > 0 && <p style={{ color: ac, fontWeight: 800, margin: "6px 0 0", fontSize: 15 }}>Total: {p.total.toFixed(2)}€</p>}
+                    </div>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <Btn small variant="secondary" onClick={() => { setEditar(p); setModal(true); }}>✏️</Btn>
+                      <Btn small variant="success" onClick={() => setFacturaPedido(p)}>🧾</Btn>
+                      <Btn small variant="secondary" onClick={() => setTicketPedido(p)}>🖨️</Btn>
+                      <Btn small variant="danger" onClick={() => eliminar(p.id)}>🗑️</Btn>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #25262f" }}>
+                    <Chips accent={ESTADO_COLORS[p.estado]} options={ESTADOS_PEDIDO} value={p.estado} onChange={v => cambiarEstado(p.id, v)} />
+                  </div>
+                </div>
+              )}
+            </Card>
+            );
+          })}
         </div>
       ))}
 
