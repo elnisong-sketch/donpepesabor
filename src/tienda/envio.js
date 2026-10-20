@@ -7,11 +7,11 @@ const ORIGEN_LAT = 40.3381
 const ORIGEN_LON = -3.6752 // Calle Berrocal 56, 28021 Madrid (Butarque, Villaverde)
 
 export const TARIFA_BASE = 6
-export const TEXTO_TARIFAS = '≤10 km: 6 € · 10–12 km: 8 € · más de 12 km: 10 €'
+export const TEXTO_TARIFAS = 'Hasta 10 km: 6 € · de 10 a 15 km: 8 € · más de 15 km: 10 €'
 
 export function tarifaPorKm(km) {
   if (km <= 10) return 6
-  if (km <= 12) return 8
+  if (km <= 15) return 8
   return 10
 }
 
