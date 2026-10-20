@@ -1023,17 +1023,32 @@ function ModuloMostrador({ productos, setProductos, jornadas, setJornadas }) {
         </Card>
       )}
 
-      {verHistorico && cerradas.map(j => (
-        <Card key={j.id}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <span style={{ color: TEXT_MAIN, fontWeight: 700, fontSize: 14 }}>{j.fecha}</span>
-            <span style={{ color: ac, fontWeight: 800, fontSize: 14 }}>{(j.importe || 0).toFixed(2)}€</span>
-          </div>
-          <p style={{ color: TEXT_SUB, fontSize: 12, margin: "4px 0 0" }}>
-            {j.vendidas || 0} uds vendidas{j.merma ? ` · ${j.merma} de merma` : ""}
-          </p>
-        </Card>
-      ))}
+      {verHistorico && cerradas.map(j => {
+        const c = cuentasJornada(j, productos);
+        return (
+          <Card key={j.id}>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span style={{ color: TEXT_MAIN, fontWeight: 700, fontSize: 14 }}>{j.fecha}</span>
+              <span style={{ color: ac, fontWeight: 800, fontSize: 14 }}>{(j.importe || 0).toFixed(2)}€</span>
+            </div>
+            <p style={{ color: TEXT_SUB, fontSize: 12, margin: "4px 0 8px" }}>
+              {j.vendidas || 0} uds vendidas{j.merma ? ` · ${j.merma} de merma` : ""}
+            </p>
+            {c.lineas.map((l, i) => (
+              <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "4px 0", borderTop: `1px solid ${BORDER}` }}>
+                <span style={{ color: TEXT_SUB, fontSize: 12 }}>
+                  {l.nombre} · {l.presentacion}
+                </span>
+                <span style={{ color: TEXT_MAIN, fontSize: 12, textAlign: "right" }}>
+                  saqué {l.bandejasSacadas}{l.sueltasIniciales ? `+${l.sueltasIniciales}u` : ""} ·
+                  volvieron {l.bandejasDevueltas}{l.sueltasDevueltas ? `+${l.sueltasDevueltas}u` : ""} ·
+                  <strong style={{ color: ac }}> {l.vendidas} uds</strong>
+                </span>
+              </div>
+            ))}
+          </Card>
+        );
+      })}
     </div>
   );
 }
