@@ -472,7 +472,8 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
   const [facturaPedido, setFacturaPedido] = useState(null);
   const [ticketPedido, setTicketPedido] = useState(null);
   const [expandido, setExpandido] = useState(null);   // id del pedido abierto
-  const [filtroEstado, setFiltroEstado] = useState("Todos");
+  // Al entrar se muestran los pendientes: es lo que hay que atender.
+  const [filtroEstado, setFiltroEstado] = useState("Pendiente");
   const [filtroFecha, setFiltroFecha] = useState("");
 
   const guardar = (p) => {
@@ -502,7 +503,10 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
 
   const filtrados = pedidos
     .filter(p => (filtroEstado === "Todos" || p.estado === filtroEstado) && (!filtroFecha || p.fecha === filtroFecha))
-    .sort((a, b) => String(b.fecha || "").localeCompare(String(a.fecha || "")));
+    .sort((a, b) =>
+      String(b.fecha || "").localeCompare(String(a.fecha || "")) ||
+      String(a.rangoHorario || "~").localeCompare(String(b.rangoHorario || "~"))
+    );
 
   // Los pedidos se agrupan por día de entrega, del más reciente al más antiguo.
   const porFecha = filtrados.reduce((grupos, p) => {
