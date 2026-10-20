@@ -1775,40 +1775,70 @@ function ModuloReporte({ pedidos, compras, gastos, producciones, trabajadoras, i
 }
 
 // ─── MÓDULO STOCK ────────────────────────────────────────────────────────────
-function ModuloStock({ productos, irInicio }) {
+function ModuloStock({ productos }) {
   const ac = ACENTOS.stock;
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <h2 style={{ color: ac, margin: 0, fontSize: 18, fontWeight: 900 }}>🗃️ Stock por Lotes</h2>
       </div>
-      {productos.length === 0 && <p style={{ color: "#555", textAlign: "center", marginTop: 40 }}>No hay productos registrados.</p>}
+      <p style={{ color: TEXT_SUB, fontSize: 12, margin: "0 0 14px" }}>
+        El stock se lleva en bandejas. Al lado van las unidades que suponen.
+      </p>
+      {productos.length === 0 && <Empty texto="No hay productos registrados." />}
       {productos.map(prod => (
-        <div key={prod.id} style={{ background: BG_CARD, border: "1px solid #1d1e26", borderRadius: 14, marginBottom: 12, overflow: "hidden" }}>
-          <div style={{ padding: "12px 16px", borderBottom: "1px solid #1d1e26", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div key={prod.id} style={{ background: BG_CARD, border: `1px solid ${BORDER}`, borderRadius: 14, marginBottom: 12, overflow: "hidden" }}>
+          <div style={{ padding: "12px 16px", borderBottom: `1px solid ${BORDER}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ fontWeight: 700, fontSize: 15 }}>{prod.nombre}</span>
-            <span style={{ color: "#555", fontSize: 12 }}>{prod.categoria}</span>
+            <span style={{ color: TEXT_SUB, fontSize: 12 }}>{prod.categoria}</span>
           </div>
+
+          {(prod.sueltas || 0) > 0 && (
+            <div style={{ padding: "8px 16px", background: BG_INPUT, borderBottom: `1px solid ${BORDER}` }}>
+              <span style={{ color: ACENTOS.mostrador, fontSize: 12, fontWeight: 700 }}>
+                🏪 {prod.sueltas} unidades sueltas de bandejas ya abiertas
+              </span>
+            </div>
+          )}
+
           {prod.variantes.map((v, i) => {
-            const total = stockTotal(v.lotes);
-            const lotes = [...(v.lotes || [])].sort((a, b) => a.fecha.localeCompare(b.fecha));
+            const uds = unidadesPorPresentacion(v.presentacion);
+            const bandejas = (v.lotes || []).length ? stockTotal(v.lotes) : (v.stock || 0);
+            const enMostrador = v.enMostrador || 0;
+            const libres = Math.max(0, bandejas - enMostrador);
+            const lotes = [...(v.lotes || [])].sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
             return (
-              <div key={i} style={{ padding: "10px 16px", borderBottom: i < prod.variantes.length - 1 ? "1px solid #1d1e26" : "none" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: lotes.length > 0 ? 8 : 0 }}>
-                  <span style={{ color: "#aaa", fontSize: 14 }}>{v.presentacion}</span>
-                  <span style={{ color: total > 0 ? ac : "#ef4444", fontWeight: 800, fontSize: 15 }}>{total} uds</span>
+              <div key={i} style={{ padding: "10px 16px", borderBottom: i < prod.variantes.length - 1 ? `1px solid ${BORDER}` : "none" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: lotes.length > 0 ? 8 : 0 }}>
+                  <span style={{ color: TEXT_SUB, fontSize: 14 }}>{v.presentacion}</span>
+                  <span style={{ textAlign: "right" }}>
+                    <span style={{ color: bandejas > 0 ? ac : "#ef4444", fontWeight: 800, fontSize: 15 }}>
+                      {bandejas} bandeja{bandejas === 1 ? "" : "s"}
+                    </span>
+                    <span style={{ color: TEXT_SUB, fontSize: 12 }}> · {bandejas * uds} uds</span>
+                  </span>
                 </div>
-                {lotes.length > 0 && (
+                {enMostrador > 0 && (
+                  <p style={{ color: ACENTOS.mostrador, fontSize: 12, margin: "0 0 6px" }}>
+                    🏪 {enMostrador} en el mostrador · quedan {libres} para pedidos
+                  </p>
+                )}
+                {lotes.length > 0 ? (
                   <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                     {lotes.map((l, j) => (
                       <div key={j} style={{ display: "flex", justifyContent: "space-between", background: BG_INPUT, borderRadius: 8, padding: "5px 10px" }}>
-                        <span style={{ color: "#666", fontSize: 12 }}>📅 {l.fecha}</span>
-                        <span style={{ color: TEXT_MAIN, fontSize: 12, fontWeight: 600 }}>{l.cantidad} uds</span>
+                        <span style={{ color: TEXT_SUB, fontSize: 12 }}>📅 {l.fecha}</span>
+                        <span style={{ color: TEXT_MAIN, fontSize: 12, fontWeight: 600 }}>
+                          {l.cantidad} bandeja{l.cantidad === 1 ? "" : "s"} · {l.cantidad * uds} uds
+                        </span>
                       </div>
                     ))}
                   </div>
+                ) : (
+                  <span style={{ color: TEXT_SUB, fontSize: 12 }}>
+                    {bandejas > 0 ? "Sin lotes registrados (stock puesto a mano)" : "Sin stock"}
+                  </span>
                 )}
-                {lotes.length === 0 && <span style={{ color: "#444", fontSize: 12 }}>Sin stock</span>}
               </div>
             );
           })}
