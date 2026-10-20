@@ -212,6 +212,7 @@
 .dps .hint{margin:0;font-size:12px;color:var(--ink-soft)}
 .dps .hint.warn{color:var(--warn);font-weight:700}
 .dps .envio-box{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--cream);border:1px solid var(--cream-2);border-radius:10px;padding:10px 12px;font-size:13px}
+.dps .envio-box.pendiente{background:#fff6ec;border-color:#f0cfa4;color:#7a4a10}
 .dps .envio-box>b{font-family:var(--f-display);font-size:18px;color:var(--vino)}
 .dps .totals{display:flex;flex-direction:column;gap:6px;font-size:13.5px}
 .dps .totals div{display:flex;justify-content:space-between;gap:12px}

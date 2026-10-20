@@ -29,6 +29,7 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
     nota: '', ...datosGuardados(),
   }))
   const [distancia, setDistancia] = useState(null)   // { km, tarifa }
+  const [direccion, setDireccion] = useState('vacia') // vacia | buscando | ok | no | sin-revisar
   const [calculando, setCalculando] = useState(false)
   const [verMensaje, setVerMensaje] = useState(false)
   const [enviando, setEnviando] = useState(false)
@@ -36,13 +37,23 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
   const domicilio = datos.tipoEntrega === 'Domicilio'
   const cpMadrid = /^28\d{3}$/.test(datos.cp.trim())
 
-  // Calcula el envío un segundo después de que se deje de escribir la dirección.
+  /**
+   * Comprueba la dirección un segundo después de dejar de escribir.
+   *
+   * No vale solo para cobrar el envío: si la dirección no existe, no se deja
+   * cerrar el pedido. Antes se cobraba la tarifa base y el repartidor se
+   * enteraba del problema delante del portal.
+   */
   useEffect(() => {
     setDistancia(null)
-    if (!domicilio || !cpMadrid || datos.direccion.trim().length < 5) return
+    if (!domicilio) { setDireccion('vacia'); return }
+    if (!cpMadrid || datos.direccion.trim().length < 5) { setDireccion('vacia'); return }
+    setDireccion('buscando')
     const t = setTimeout(async () => {
       setCalculando(true)
-      setDistancia(await calcularEnvio(datos.direccion.trim(), datos.cp.trim()))
+      const res = await calcularEnvio(datos.direccion.trim(), datos.cp.trim())
+      setDistancia(res)
+      setDireccion(res.estado)      // ok | no | sin-revisar
       setCalculando(false)
     }, 1000)
     return () => clearTimeout(t)
@@ -76,9 +87,11 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
     if (domicilio && !datos.direccion.trim()) return 'Escribe la dirección de entrega'
     if (domicilio && !datos.cp.trim()) return 'Escribe el código postal'
     if (domicilio && !cpMadrid) return 'Solo repartimos en Madrid (código postal 28xxx)'
+    if (domicilio && direccion === 'buscando') return 'Comprobando la dirección…'
+    if (domicilio && direccion === 'no') return 'No encontramos esa dirección: revisa la calle, el número y el código postal'
     if (!datos.formaPago) return 'Elige la forma de pago'
     return ''
-  }, [carrito.length, datos, domicilio, cpMadrid, tel, telOk, minFecha])
+  }, [carrito.length, datos, domicilio, cpMadrid, tel, telOk, minFecha, direccion])
 
   const mensaje = useMemo(
     () => redactarMensaje({ ...datos, telefono: telefonoCompleto, codigo }, carrito, envio, distancia),
@@ -214,15 +227,24 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
                     </div>
                     {datos.cp.trim().length === 5 && !cpMadrid && <p className="hint warn">Solo repartimos en Madrid (código postal 28xxx).</p>}
                     {cpMadrid && (
-                      <div className="envio-box">
-                        <span>
-                          {calculando ? '📍 Calculando distancia…'
-                            : distancia ? <>📍 <b>{distancia.km} km</b> hasta tu dirección</>
-                            : datos.direccion.trim().length < 5 ? 'Escribe tu dirección para calcular el envío'
-                            : 'No pudimos calcular la distancia; se aplica la tarifa base'}
-                        </span>
-                        <b>{eur(envio)}</b>
-                      </div>
+                      <>
+                        <div className={`envio-box${direccion === 'ok' ? '' : ' pendiente'}`}>
+                          <span>
+                            {direccion === 'buscando' || calculando ? '📍 Comprobando la dirección…'
+                              : direccion === 'ok' ? <>📍 <b>{distancia.km} km</b> hasta tu dirección</>
+                              : direccion === 'sin-revisar' ? 'No hemos podido comprobar la dirección; lo confirmamos contigo'
+                              : datos.direccion.trim().length < 5 ? 'Escribe tu dirección para calcular el envío'
+                              : '⚠️ No encontramos esa dirección'}
+                          </span>
+                          {(direccion === 'ok' || direccion === 'sin-revisar') && <b>{eur(envio)}</b>}
+                        </div>
+                        {direccion === 'no' && (
+                          <p className="hint warn">
+                            Revisa la calle, el número y el código postal. Si la dirección es correcta y sigue
+                            sin salir, haz el pedido por WhatsApp al 604 136 371.
+                          </p>
+                        )}
+                      </>
                     )}
                     {cpMadrid && <p className="hint">{TEXTO_TARIFAS}</p>}
                   </>

@@ -66,7 +66,7 @@ export function redactarMensaje(d, items, envio, distancia) {
   const wa = whatsappDe(d.telefono)
   if (wa) L.push(`https://wa.me/${wa}`)
   if (d.tipoEntrega === 'Domicilio') {
-    const km = distancia ? ` (${distancia.km} km)` : ''
+    const km = distancia?.km ? ` (${distancia.km} km)` : ''
     L.push(`*Entrega:* 🚚 A domicilio — ${d.direccion || '—'}, ${d.cp || '—'}${km}`)
   } else {
     L.push(`*Entrega:* 🏪 Recogida en ${DIRECCION_LOCAL}`)
