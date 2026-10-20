@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { db } from "./firebase";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { bandejasFritas, preparacionDe, quienEntrega, totalesPedido } from "./pedidos.js";
+import { cuentasJornada, disponibles } from "./mostrador.js";
 
 // ─── DATOS INICIALES (idénticos a App.jsx) ──────────────────────────────────
 const PRODUCTOS_INICIALES = [];
@@ -51,6 +52,7 @@ const ACENTOS = {
   gastos:     "#ef4444",   // rojo
   reporte:    "#6366f1",   // indigo
   personal:   "#f59e0b",   // ámbar
+  mostrador:  "#d946ef",   // fucsia
   admin:      "#64748b",   // gris
 };
 
@@ -835,6 +837,203 @@ function ModuloClientes({ clientes, setClientes, pedidos, irInicio }) {
           </div>
         </Modal>
       )}
+    </div>
+  );
+}
+
+// ─── MÓDULO: MOSTRADOR ──────────────────────────────────────────────────────
+// Salida de bandejas al local por la mañana y devolución al cerrar. El TPV no está
+// enlazado, así que lo vendido se calcula por diferencia (ver src/mostrador.js).
+function ModuloMostrador({ productos, setProductos, jornadas, setJornadas }) {
+  const ac = ACENTOS.mostrador;
+  const abierta = jornadas.find(j => !j.cerrada);
+  const [salidas, setSalidas] = useState({});   // "prodId|presentacion" -> bandejas
+  const [devol, setDevol] = useState({});       // "prodId|presentacion" -> {bandejas, sueltas, merma}
+  const [verHistorico, setVerHistorico] = useState(false);
+
+  const clave = (prodId, pres) => `${prodId}|${pres}`;
+  const sueltasDe = (prodId) => productos.find(p => String(p.id) === String(prodId))?.sueltas || 0;
+
+  const abrirJornada = () => {
+    const lista = [];
+    for (const [k, bandejas] of Object.entries(salidas)) {
+      const n = parseInt(bandejas) || 0;
+      if (n <= 0) continue;
+      const [productoId, presentacion] = k.split("|");
+      // Las sueltas que quedaron de ayer salen las primeras.
+      const yaPuesto = lista.some(l => String(l.productoId) === String(productoId));
+      lista.push({ productoId, presentacion, bandejas: n, sueltas: yaPuesto ? 0 : sueltasDe(productoId) });
+    }
+    if (!lista.length) { alert("Marca cuántas bandejas sacas al mostrador."); return; }
+
+    const resumen = lista.map(l => {
+      const prod = productos.find(p => String(p.id) === String(l.productoId));
+      return `· ${l.bandejas} x ${l.presentacion} de ${prod?.nombre}` + (l.sueltas ? ` (+${l.sueltas} sueltas de ayer)` : "");
+    }).join("\n");
+    if (!confirm(`Salen al mostrador:\n${resumen}\n\n¿Continuar?`)) return;
+
+    // Reservadas: siguen en el stock pero no disponibles para la web ni para pedidos.
+    setProductos(ps => ps.map(p => {
+      const suyas = lista.filter(l => String(l.productoId) === String(p.id));
+      if (!suyas.length) return p;
+      return {
+        ...p,
+        sueltas: 0,
+        variantes: p.variantes.map(v => {
+          const l = suyas.find(x => x.presentacion === v.presentacion);
+          return l ? { ...v, enMostrador: (v.enMostrador || 0) + l.bandejas } : v;
+        }),
+      };
+    }));
+
+    setJornadas(js => [{ id: generarId(), fecha: hoy(), abierta: new Date().toISOString(), salidas: lista, devoluciones: [], cerrada: false }, ...js]);
+    setSalidas({});
+  };
+
+  const devolucionesDe = (mapa) => (abierta?.salidas || []).map(sal => {
+    const d = mapa[clave(sal.productoId, sal.presentacion)] || {};
+    return {
+      productoId: sal.productoId, presentacion: sal.presentacion,
+      bandejas: parseInt(d.bandejas) || 0,
+      sueltas: parseInt(d.sueltas) || 0,
+      merma: parseInt(d.merma) || 0,
+    };
+  });
+
+  const cerrarJornada = () => {
+    const devoluciones = devolucionesDe(devol);
+    const cuentas = cuentasJornada({ ...abierta, devoluciones }, productos);
+    const sobra = cuentas.lineas.find(l => l.bandejasDevueltas > l.bandejasSacadas);
+    if (sobra) { alert(`En ${sobra.nombre} devuelves más bandejas de las que sacaste.`); return; }
+
+    const resumen = cuentas.lineas.filter(l => l.vendidas || l.merma)
+      .map(l => `· ${l.nombre}: ${l.vendidas} uds vendidas` + (l.merma ? ` · ${l.merma} de merma` : "")).join("\n");
+    if (!confirm(`Cierre del mostrador:\n${resumen || "· sin ventas"}\n\nTotal estimado: ${cuentas.importe.toFixed(2)}€\n\n¿Guardar?`)) return;
+
+    // Lo que no vuelve entero sale del stock: vendido o bandeja abierta.
+    setProductos(ps => ps.map(p => {
+      const suyas = cuentas.lineas.filter(l => String(l.productoId) === String(p.id));
+      if (!suyas.length) return p;
+      const sueltasQueVuelven = suyas.reduce((t, l) => t + l.sueltasDevueltas, 0);
+      return {
+        ...p,
+        sueltas: sueltasQueVuelven,
+        variantes: p.variantes.map(v => {
+          const l = suyas.find(x => x.presentacion === v.presentacion);
+          if (!l) return v;
+          const lotes = deductFIFO(v.lotes || [], l.bandejasConsumidas);
+          return {
+            ...v,
+            lotes,
+            stock: (v.lotes || []).length ? stockTotal(lotes) : Math.max(0, (v.stock || 0) - l.bandejasConsumidas),
+            enMostrador: Math.max(0, (v.enMostrador || 0) - l.bandejasSacadas),
+          };
+        }),
+      };
+    }));
+
+    setJornadas(js => js.map(j => j.id === abierta.id
+      ? { ...j, devoluciones, cerrada: new Date().toISOString(), vendidas: cuentas.vendidas, importe: cuentas.importe, merma: cuentas.merma }
+      : j));
+    setDevol({});
+  };
+
+  const cerradas = jornadas.filter(j => j.cerrada);
+  const cuentasEnVivo = abierta ? cuentasJornada({ ...abierta, devoluciones: devolucionesDe(devol) }, productos) : null;
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <h2 style={{ color: ac, margin: 0 }}>🏪 Mostrador</h2>
+        {cerradas.length > 0 && (
+          <Btn small variant="secondary" onClick={() => setVerHistorico(v => !v)}>
+            {verHistorico ? "Ocultar días" : "Ver días anteriores"}
+          </Btn>
+        )}
+      </div>
+
+      {!abierta ? (
+        <Card accent={ac}>
+          <p style={{ color: TEXT_MAIN, fontWeight: 800, margin: "0 0 4px" }}>Abrir jornada</p>
+          <p style={{ color: TEXT_SUB, fontSize: 13, margin: "0 0 12px" }}>
+            Marca las bandejas que sacas al local. Dejan de estar disponibles para la web hasta que cierres.
+          </p>
+          {productos.length === 0 && <Empty texto="No hay productos en el inventario" />}
+          {productos.map(prod => (
+            <div key={prod.id} style={{ padding: "8px 0", borderBottom: `1px solid ${BORDER}` }}>
+              <p style={{ color: TEXT_MAIN, fontSize: 14, fontWeight: 700, margin: "0 0 6px" }}>
+                {prod.nombre}
+                {sueltasDe(prod.id) > 0 && <span style={{ color: ac, fontSize: 12 }}> · {sueltasDe(prod.id)} sueltas de ayer</span>}
+              </p>
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                {prod.variantes.map(v => {
+                  const libres = disponibles(v);
+                  return (
+                    <div key={v.presentacion} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ color: TEXT_SUB, fontSize: 12 }}>{v.presentacion} <small>({libres} disp.)</small></span>
+                      <input type="number" min="0" max={libres} value={salidas[clave(prod.id, v.presentacion)] || ""}
+                        onChange={e => {
+                          const n = Math.min(parseInt(e.target.value) || 0, libres);
+                          setSalidas(x => ({ ...x, [clave(prod.id, v.presentacion)]: n || "" }));
+                        }}
+                        style={{ width: 64, background: BG_INPUT, border: `1px solid ${BORDER}`, borderRadius: 8, color: TEXT_MAIN, padding: "5px 8px", fontSize: 13 }} />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+          <Btn accent={ac} onClick={abrirJornada} style={{ width: "100%", marginTop: 14 }}>🏪 Sacar al mostrador</Btn>
+        </Card>
+      ) : (
+        <Card accent={ac}>
+          <p style={{ color: TEXT_MAIN, fontWeight: 800, margin: "0 0 4px" }}>Cerrar jornada del {abierta.fecha}</p>
+          <p style={{ color: TEXT_SUB, fontSize: 13, margin: "0 0 12px" }}>Cuenta lo que vuelve. Lo que falte se da por vendido.</p>
+          {(abierta.salidas || []).map(sal => {
+            const prod = productos.find(p => String(p.id) === String(sal.productoId));
+            const k = clave(sal.productoId, sal.presentacion);
+            const d = devol[k] || {};
+            const set = (campo, valor) => setDevol(x => ({ ...x, [k]: { ...x[k], [campo]: valor } }));
+            return (
+              <div key={k} style={{ padding: "10px 0", borderBottom: `1px solid ${BORDER}` }}>
+                <p style={{ color: TEXT_MAIN, fontSize: 14, fontWeight: 700, margin: "0 0 2px" }}>{prod?.nombre}</p>
+                <p style={{ color: TEXT_SUB, fontSize: 12, margin: "0 0 8px" }}>
+                  Sacaste {sal.bandejas} x {sal.presentacion}{sal.sueltas ? ` y ${sal.sueltas} sueltas` : ""}
+                </p>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {[["bandejas", "Bandejas enteras"], ["sueltas", "Unidades sueltas"], ["merma", "Merma (uds)"]].map(([campo, etiqueta]) => (
+                    <div key={campo}>
+                      <p style={{ color: TEXT_SUB, fontSize: 11, margin: "0 0 2px" }}>{etiqueta}</p>
+                      <input type="number" min="0" value={d[campo] || ""} onChange={e => set(campo, e.target.value)}
+                        style={{ width: 92, background: BG_INPUT, border: `1px solid ${BORDER}`, borderRadius: 8, color: TEXT_MAIN, padding: "6px 8px", fontSize: 13 }} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+          <div style={{ marginTop: 12, padding: 12, background: BG_INPUT, borderRadius: 12 }}>
+            <p style={{ color: TEXT_MAIN, fontSize: 14, fontWeight: 800, margin: 0 }}>
+              Vendidas: {cuentasEnVivo.vendidas} uds · {cuentasEnVivo.importe.toFixed(2)}€
+              <span style={{ color: TEXT_SUB, fontWeight: 400, fontSize: 12 }}> (estimado)</span>
+            </p>
+            {cuentasEnVivo.merma > 0 && <p style={{ color: "#ef4444", fontSize: 12, margin: "4px 0 0" }}>Merma: {cuentasEnVivo.merma} uds</p>}
+          </div>
+          <Btn accent={ac} onClick={cerrarJornada} style={{ width: "100%", marginTop: 14 }}>✅ Cerrar y devolver al stock</Btn>
+        </Card>
+      )}
+
+      {verHistorico && cerradas.map(j => (
+        <Card key={j.id}>
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span style={{ color: TEXT_MAIN, fontWeight: 700, fontSize: 14 }}>{j.fecha}</span>
+            <span style={{ color: ac, fontWeight: 800, fontSize: 14 }}>{(j.importe || 0).toFixed(2)}€</span>
+          </div>
+          <p style={{ color: TEXT_SUB, fontSize: 12, margin: "4px 0 0" }}>
+            {j.vendidas || 0} uds vendidas{j.merma ? ` · ${j.merma} de merma` : ""}
+          </p>
+        </Card>
+      ))}
     </div>
   );
 }
@@ -1874,6 +2073,7 @@ const TABS = [
   { id: "pedidos",    label: "Pedidos",    icon: "📦" },
   { id: "clientes",   label: "Clientes",   icon: "👥" },
   { id: "inventario", label: "Inventario", icon: "📊" },
+  { id: "mostrador",  label: "Mostrador",  icon: "🏪" },
   { id: "stock",      label: "Stock",      icon: "🗃️" },
   { id: "produccion", label: "Producción", icon: "🏭" },
   { id: "personal",   label: "Personal",   icon: "🧑‍💼" },
@@ -1897,6 +2097,7 @@ function ModuloBienvenida({ setTab, pendientes, hoyEntregas }) {
     { id: "pedidos",    icon: "📦", label: "Pedidos",    desc: "Gestiona los pedidos del día", color: ACENTOS.pedidos },
     { id: "clientes",   icon: "👥", label: "Clientes",   desc: "Directorio de clientes",       color: ACENTOS.clientes },
     { id: "inventario", icon: "🏷️", label: "Inventario", desc: "Productos y precios",           color: ACENTOS.inventario },
+    { id: "mostrador",  icon: "🏪", label: "Mostrador",  desc: "Venta en el local",             color: ACENTOS.mostrador },
     { id: "stock",      icon: "📦", label: "Stock",      desc: "Control de existencias",        color: ACENTOS.stock },
     { id: "produccion", icon: "🏭", label: "Producción", desc: "Registro de producción",        color: ACENTOS.produccion },
     { id: "personal",   icon: "👤", label: "Personal",   desc: "Repartidores y trabajadoras",   color: ACENTOS.personal },
@@ -2008,6 +2209,7 @@ export default function AppModerno() {
   });
   const [producciones, setProducciones] = useState(() => cargarLS("producciones", PRODUCCIONES_DEMO));
   const [trabajadoras, setTrabajadoras] = useState(() => cargarLS("trabajadoras", TRABAJADORAS_DEMO));
+  const [jornadas, setJornadas] = useState(() => cargarLS("jornadas", []));   // mostrador
 
   const [listo, setListo] = useState(false);
 
@@ -2026,6 +2228,7 @@ export default function AppModerno() {
   useEffect(() => { if (listo) sync("repartidores", repartidores); }, [JSON.stringify(repartidores)]);
   useEffect(() => { if (listo) sync("producciones", producciones); }, [JSON.stringify(producciones)]);
   useEffect(() => { if (listo) sync("trabajadoras", trabajadoras); }, [JSON.stringify(trabajadoras)]);
+  useEffect(() => { if (listo) sync("jornadas", jornadas); }, [JSON.stringify(jornadas)]);
 
   /**
    * Primero se LEE la nube, y solo después se escribe.
@@ -2040,7 +2243,7 @@ export default function AppModerno() {
       pedidos: setPedidos, clientes: setClientes, productos: setProductos,
       proveedores: setProveedores, compras: setCompras, ingredientes: setIngredientes,
       gastos: setGastos, repartidores: setRepartidores, producciones: setProducciones,
-      trabajadoras: setTrabajadoras,
+      trabajadoras: setTrabajadoras, jornadas: setJornadas,
     };
     const claves = Object.keys(destinos);
     let faltan = claves.length;
@@ -2102,7 +2305,7 @@ export default function AppModerno() {
   };
 
   const exportarDatos = () => {
-    const datos = { pedidos, clientes, productos, proveedores, compras, ingredientes, gastos, repartidores, producciones, trabajadoras, exportado: new Date().toISOString() };
+    const datos = { pedidos, clientes, productos, proveedores, compras, ingredientes, gastos, repartidores, producciones, trabajadoras, jornadas, exportado: new Date().toISOString() };
     const blob = new Blob([JSON.stringify(datos, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -2127,7 +2330,7 @@ export default function AppModerno() {
         pedidos: setPedidos, clientes: setClientes, productos: setProductos,
         proveedores: setProveedores, compras: setCompras, ingredientes: setIngredientes,
         gastos: setGastos, repartidores: setRepartidores, producciones: setProducciones,
-        trabajadoras: setTrabajadoras,
+        trabajadoras: setTrabajadoras, jornadas: setJornadas,
       };
       const entran = Object.keys(destinos).filter(k => Array.isArray(d[k]));
       if (!entran.length) { alert("El archivo no contiene datos reconocibles."); return; }
@@ -2258,6 +2461,7 @@ export default function AppModerno() {
         {tab === "pedidos" && <ModuloPedidos pedidos={pedidos} setPedidos={setPedidos} productos={productos} setProductos={setProductos} clientes={clientes} repartidores={repartidores} />}
         {tab === "clientes" && <ModuloClientes clientes={clientes} setClientes={setClientes} pedidos={pedidos} />}
         {tab === "inventario" && <ModuloInventario productos={productos} setProductos={setProductos} />}
+        {tab === "mostrador" && <ModuloMostrador productos={productos} setProductos={setProductos} jornadas={jornadas} setJornadas={setJornadas} />}
         {tab === "stock" && <ModuloStock productos={productos} />}
         {tab === "produccion" && <ModuloProduccion producciones={producciones} setProducciones={setProducciones} trabajadoras={trabajadoras} setTrabajadoras={setTrabajadoras} productos={productos} setProductos={setProductos} />}
         {tab === "personal" && <ModuloPersonal repartidores={repartidores} setRepartidores={setRepartidores} trabajadoras={trabajadoras} setTrabajadoras={setTrabajadoras} />}
