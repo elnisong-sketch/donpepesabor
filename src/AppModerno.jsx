@@ -213,10 +213,19 @@ function FormularioPedido({ productos, clientes, repartidores, onGuardar, onCerr
     ? repartidores.filter(r => r.id === REPARTIDOR_TIENDA_ID)
     : repartidores.filter(r => r.id !== REPARTIDOR_TIENDA_ID);
 
-  const precioFinalItem = (it, productosRef) => {
+  /** Precio de inventario de esa bandeja, sin comisiones ni recargos. */
+  const precioTarifa = (it, productosRef) => {
     const prod = productosRef.find(p => String(p.id) === String(it.productoId));
-    const variante = prod?.variantes.find(v => v.presentacion === it.presentacion);
-    const base = variante?.precio || 0;
+    return prod?.variantes.find(v => v.presentacion === it.presentacion)?.precio || 0;
+  };
+
+  /**
+   * Lo que se cobra por bandeja. Si se ha escrito un precio a mano manda ese: hay
+   * clientes con precio pactado. La comisión y el recargo de frito se suman aparte.
+   */
+  const precioFinalItem = (it, productosRef) => {
+    const manual = it.precioManual === "" || it.precioManual === undefined ? null : parseFloat(it.precioManual);
+    const base = manual !== null && !isNaN(manual) ? manual : precioTarifa(it, productosRef);
     const comision = parseFloat(it.comision) || 0;
     const recargoFrito = it.estado === "Frito" ? (parseFloat(it.recargoFrito) || 0) : 0;
     return base + comision + recargoFrito;
@@ -227,9 +236,10 @@ function FormularioPedido({ productos, clientes, repartidores, onGuardar, onCerr
     const prod = productos.find(p => String(p.id) === String(item.productoId));
     const precioFinal = precioFinalItem(item, productos);
     setForm(f => ({
-      ...f, items: [...f.items, { ...item, id: generarId(), nombreProducto: prod.nombre, precio: precioFinal, subtotal: precioFinal * item.cantidad }]
+      ...f, items: [...f.items, { ...item, id: generarId(), nombreProducto: prod.nombre, precio: precioFinal,
+        precioTarifa: precioTarifa(item, productos), subtotal: precioFinal * item.cantidad }]
     }));
-    setItem({ productoId: "", presentacion: "Bandeja 25", estado: "Congelado", cantidad: 1, comision: 0, recargoFrito: 0 });
+    setItem({ productoId: "", presentacion: "Bandeja 25", estado: "Congelado", cantidad: 1, comision: 0, recargoFrito: 0, precioManual: "" });
   };
 
   const subtotalProductos = form.items.reduce((s, i) => s + (i.subtotal || 0), 0);
@@ -284,7 +294,7 @@ function FormularioPedido({ productos, clientes, repartidores, onGuardar, onCerr
           value={item.productoId} onChange={e => {
             const nuevo = productos.find(p => String(p.id) === String(e.target.value));
             const pres = nuevo?.variantes?.[0]?.presentacion;
-            setItem(i => ({ ...i, productoId: e.target.value, ...(pres ? { presentacion: pres } : {}) }));
+            setItem(i => ({ ...i, productoId: e.target.value, precioManual: "", ...(pres ? { presentacion: pres } : {}) }));
           }} />
         {(() => {
           // Las presentaciones son las del producto elegido: los cachitos van en bandeja de 6.
@@ -295,7 +305,17 @@ function FormularioPedido({ productos, clientes, repartidores, onGuardar, onCerr
             onChange={v => setItem(i => ({ ...i, presentacion: v }))} />;
         })()}
         <Chips label="Estado" accent={ac} options={["Congelado", "Frito"]} value={item.estado} onChange={v => setItem(i => ({ ...i, estado: v }))} />
-        <Input label="Cantidad" type="number" min="1" value={item.cantidad} onChange={e => setItem(i => ({ ...i, cantidad: parseInt(e.target.value) || 1 }))} />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <Input label="Cantidad" type="number" min="1" value={item.cantidad} onChange={e => setItem(i => ({ ...i, cantidad: parseInt(e.target.value) || 1 }))} />
+          <Input label="Precio por bandeja (€)" type="number" min="0" step="0.01" value={item.precioManual ?? ""}
+            placeholder={item.productoId ? precioTarifa(item, productos).toFixed(2) : "—"}
+            onChange={e => setItem(i => ({ ...i, precioManual: e.target.value }))} />
+        </div>
+        {item.productoId && item.precioManual !== "" && item.precioManual !== undefined && !isNaN(parseFloat(item.precioManual)) && (
+          <p style={{ color: ACENTOS.gastos, fontSize: 12, margin: "0 0 10px", fontWeight: 700 }}>
+            Precio especial: {parseFloat(item.precioManual).toFixed(2)}€ · tarifa {precioTarifa(item, productos).toFixed(2)}€
+          </p>
+        )}
         <div style={{ display: "grid", gridTemplateColumns: item.estado === "Frito" ? "1fr 1fr" : "1fr", gap: 8 }}>
           <Input label="Comisión por unidad (€)" type="number" step="0.01" value={item.comision} onChange={e => setItem(i => ({ ...i, comision: e.target.value }))} placeholder="Ej: 2" />
           {item.estado === "Frito" && (
@@ -324,6 +344,9 @@ function FormularioPedido({ productos, clientes, repartidores, onGuardar, onCerr
                 <span style={{ color: TEXT_MAIN, fontSize: 13 }}>{it.cantidad}x {it.nombreProducto} · {it.presentacion} · {it.estado}</span>
                 <div style={{ color: "#666", fontSize: 12, marginTop: 2 }}>
                   {it.precio > 0 ? `Precio unitario: ${it.precio.toFixed(2)}€` : "Precio unitario: — (sin precio en Inventario)"}
+                  {it.precioTarifa > 0 && Math.abs(it.precioTarifa - it.precio) > 0.009 && (
+                    <span style={{ color: ACENTOS.gastos, fontWeight: 700 }}> · especial (tarifa {it.precioTarifa.toFixed(2)}€)</span>
+                  )}
                 </div>
               </div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
