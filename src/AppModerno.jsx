@@ -175,6 +175,19 @@ const Empty = ({ texto }) => (
 );
 
 // ─── MÓDULO: PEDIDOS ────────────────────────────────────────────────────────
+
+/** "2026-10-20" → "HOY · lunes 20/10". Encabeza cada grupo de pedidos. */
+function etiquetaDia(iso) {
+  if (!iso || iso === "Sin fecha") return "SIN FECHA";
+  const [a, m, d] = iso.split("-").map(Number);
+  if ([a, m, d].some(isNaN)) return iso;
+  const fecha = new Date(a, m - 1, d);
+  const hoyD = new Date(); hoyD.setHours(0, 0, 0, 0);
+  const dias = Math.round((fecha - hoyD) / 86400000);
+  const prefijo = dias === 0 ? "HOY · " : dias === 1 ? "MAÑANA · " : dias === -1 ? "AYER · " : "";
+  const nombre = fecha.toLocaleDateString("es-ES", { weekday: "long" });
+  return `${prefijo}${nombre} ${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}/${a}`;
+}
 function FormularioPedido({ productos, clientes, repartidores, onGuardar, onCerrar, pedidoEditar }) {
   const ac = ACENTOS.pedidos;
   const [form, setForm] = useState(pedidoEditar || {
@@ -486,7 +499,16 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
     setEstadoPendiente(null);
   };
 
-  const filtrados = pedidos.filter(p => (filtroEstado === "Todos" || p.estado === filtroEstado) && (!filtroFecha || p.fecha === filtroFecha));
+  const filtrados = pedidos
+    .filter(p => (filtroEstado === "Todos" || p.estado === filtroEstado) && (!filtroFecha || p.fecha === filtroFecha))
+    .sort((a, b) => String(b.fecha || "").localeCompare(String(a.fecha || "")));
+
+  // Los pedidos se agrupan por día de entrega, del más reciente al más antiguo.
+  const porFecha = filtrados.reduce((grupos, p) => {
+    const dia = p.fecha || "Sin fecha";
+    (grupos[dia] = grupos[dia] || []).push(p);
+    return grupos;
+  }, {});
 
   return (
     <div>
@@ -502,7 +524,17 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
         {filtroFecha && <Btn small variant="secondary" onClick={() => setFiltroFecha("")}>✕ Limpiar fecha</Btn>}
       </div>
 
-      {filtrados.length === 0 ? <Empty texto="No hay pedidos con estos filtros" /> : filtrados.map(p => (
+      {filtrados.length === 0 ? <Empty texto="No hay pedidos con estos filtros" /> : Object.entries(porFecha).map(([dia, delDia]) => (
+        <div key={dia}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "18px 0 10px" }}>
+            <span style={{ color: ac, fontWeight: 900, fontSize: 14 }}>{etiquetaDia(dia)}</span>
+            <span style={{ color: TEXT_SUB, fontSize: 12 }}>{delDia.length} pedido{delDia.length > 1 ? "s" : ""}</span>
+            <span style={{ flex: 1, height: 1, background: BORDER }} />
+            <span style={{ color: TEXT_SUB, fontSize: 12, fontWeight: 700 }}>
+              {delDia.reduce((t, x) => t + (x.total || 0), 0).toFixed(2)}€
+            </span>
+          </div>
+          {delDia.map(p => (
         <Card key={p.id} accent={ESTADO_COLORS[p.estado]}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 8 }}>
             <div>
@@ -534,6 +566,8 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
             <Chips accent={ESTADO_COLORS[p.estado]} options={ESTADOS_PEDIDO} value={p.estado} onChange={v => cambiarEstado(p.id, v)} />
           </div>
         </Card>
+          ))}
+        </div>
       ))}
 
       {(modal || editar) && (
