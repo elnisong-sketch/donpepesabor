@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { db } from "./firebase";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
+import { preparacionDe, totalesPedido } from "./pedidos.js";
 
 const FORMAS_PAGO = ["Efectivo", "Bizum", "Transferencia", "Tarjeta"];
 
@@ -238,8 +239,7 @@ export default function AppRepartidor() {
 
   if (pedidoAbierto) {
     const p = { ...pedidoAbierto, ...cambiosPendientes };
-    const totalProductos = p.items?.reduce((s, i) => s + (i.subtotal || 0), 0) || 0;
-    const total = totalProductos + (parseFloat(p.envio) || 0);
+    const { servicio, total } = totalesPedido(p);
 
     return (
       <div style={base}>
@@ -266,11 +266,17 @@ export default function AppRepartidor() {
             {p.items?.map((it, i) => (
               <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: i < p.items.length - 1 ? `1px solid ${BORDER}` : "none" }}>
                 <span style={{ color: TEXT_MAIN, fontSize: 14 }}>{it.cantidad}× {it.nombreProducto} · {it.presentacion}
-                  {it.estado === "Frito" && <span style={{ color: "#f59e0b", fontSize: 12 }}> · Fritos</span>}
+                  {preparacionDe(it) === "Frito" && <span style={{ color: "#f59e0b", fontSize: 12 }}> · Fritos</span>}
                 </span>
                 <span style={{ color: TEXT_MAIN, fontSize: 14, fontWeight: 600 }}>{(it.subtotal || 0).toFixed(2)}€</span>
               </div>
             ))}
+            {servicio > 0 && (
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0" }}>
+                <span style={{ color: TEXT_SUB, fontSize: 14 }}>🔥 Fritura</span>
+                <span style={{ color: TEXT_SUB, fontSize: 14 }}>{servicio.toFixed(2)}€</span>
+              </div>
+            )}
             {p.envio > 0 && (
               <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0 0" }}>
                 <span style={{ color: TEXT_SUB, fontSize: 14 }}>🚚 Envío</span>
@@ -385,7 +391,7 @@ export default function AppRepartidor() {
                 </span>
               </div>
               {porDia[dia].map(p => {
-                const total = (p.items?.reduce((s, i) => s + (i.subtotal || 0), 0) || 0) + (parseFloat(p.envio) || 0);
+                const total = totalesPedido(p).total;
                 return (
                   <div key={p.id} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderTop: `1px solid ${BORDER}` }}>
                     <span style={{ color: TEXT_SUB, fontSize: 14 }}>{p.nombre}</span>
@@ -396,7 +402,7 @@ export default function AppRepartidor() {
               <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, paddingTop: 8, borderTop: `1px solid ${BORDER}` }}>
                 <span style={{ color: TEXT_SUB, fontSize: 13, fontWeight: 700 }}>Total del día</span>
                 <span style={{ color: ORANGE, fontWeight: 800, fontSize: 15 }}>
-                  {porDia[dia].reduce((s, p) => s + (p.items?.reduce((a, i) => a + (i.subtotal || 0), 0) || 0) + (parseFloat(p.envio) || 0), 0).toFixed(2)}€
+                  {porDia[dia].reduce((s, p) => s + totalesPedido(p).total, 0).toFixed(2)}€
                 </span>
               </div>
             </div>
@@ -410,7 +416,7 @@ export default function AppRepartidor() {
             <p style={{ fontSize: 15, color: TEXT_SUB }}>No tienes pedidos asignados</p>
           </div>
         ) : misPedidos.map(p => {
-          const total = (p.items?.reduce((s, i) => s + (i.subtotal || 0), 0) || 0) + (parseFloat(p.envio) || 0);
+          const total = totalesPedido(p).total;
           const color = ESTADO_COLORS[p.estado] || "#888";
           return (
             <button key={p.id} onClick={() => { setPedidoAbierto(p); setCambiosPendientes({}); setGuardado(false); }}

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { db } from "./firebase";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
+import { bandejasFritas, preparacionDe, quienEntrega, totalesPedido } from "./pedidos.js";
 
 // ─── DATOS INICIALES (idénticos a App.jsx) ──────────────────────────────────
 const PRODUCTOS_INICIALES = [];
@@ -211,7 +212,7 @@ function FormularioPedido({ productos, clientes, repartidores, onGuardar, onCerr
     : repartidores.filter(r => r.id !== REPARTIDOR_TIENDA_ID);
 
   const precioFinalItem = (it, productosRef) => {
-    const prod = productosRef.find(p => p.id === parseInt(it.productoId));
+    const prod = productosRef.find(p => String(p.id) === String(it.productoId));
     const variante = prod?.variantes.find(v => v.presentacion === it.presentacion);
     const base = variante?.precio || 0;
     const comision = parseFloat(it.comision) || 0;
@@ -221,7 +222,7 @@ function FormularioPedido({ productos, clientes, repartidores, onGuardar, onCerr
 
   const agregarItem = () => {
     if (!item.productoId) return;
-    const prod = productos.find(p => p.id === parseInt(item.productoId));
+    const prod = productos.find(p => String(p.id) === String(item.productoId));
     const precioFinal = precioFinalItem(item, productos);
     setForm(f => ({
       ...f, items: [...f.items, { ...item, id: generarId(), nombreProducto: prod.nombre, precio: precioFinal, subtotal: precioFinal * item.cantidad }]
@@ -278,8 +279,19 @@ function FormularioPedido({ productos, clientes, repartidores, onGuardar, onCerr
       <div style={{ background: "#101015", borderRadius: 14, padding: 14, marginBottom: 14, border: `1px solid ${ac}22` }}>
         <p style={{ color: ac, fontSize: 13, fontWeight: 800, margin: "0 0 10px" }}>➕ Agregar producto</p>
         <Select label="Producto" options={[{ value: "", label: "— Seleccionar —" }, ...productos.map(p => ({ value: p.id, label: p.nombre }))]}
-          value={item.productoId} onChange={e => setItem(i => ({ ...i, productoId: e.target.value }))} />
-        <Chips label="Presentación" accent={ac} options={["Bandeja 25", "Bandeja 50"]} value={item.presentacion} onChange={v => setItem(i => ({ ...i, presentacion: v }))} />
+          value={item.productoId} onChange={e => {
+            const nuevo = productos.find(p => String(p.id) === String(e.target.value));
+            const pres = nuevo?.variantes?.[0]?.presentacion;
+            setItem(i => ({ ...i, productoId: e.target.value, ...(pres ? { presentacion: pres } : {}) }));
+          }} />
+        {(() => {
+          // Las presentaciones son las del producto elegido: los cachitos van en bandeja de 6.
+          const prodSel = productos.find(p => String(p.id) === String(item.productoId));
+          const presentaciones = prodSel?.variantes?.map(v => v.presentacion) || ["Bandeja 25", "Bandeja 50"];
+          return <Chips label="Presentación" accent={ac} options={presentaciones}
+            value={presentaciones.includes(item.presentacion) ? item.presentacion : presentaciones[0]}
+            onChange={v => setItem(i => ({ ...i, presentacion: v }))} />;
+        })()}
         <Chips label="Estado" accent={ac} options={["Congelado", "Frito"]} value={item.estado} onChange={v => setItem(i => ({ ...i, estado: v }))} />
         <Input label="Cantidad" type="number" min="1" value={item.cantidad} onChange={e => setItem(i => ({ ...i, cantidad: parseInt(e.target.value) || 1 }))} />
         <div style={{ display: "grid", gridTemplateColumns: item.estado === "Frito" ? "1fr 1fr" : "1fr", gap: 8 }}>
@@ -339,7 +351,7 @@ function FormularioPedido({ productos, clientes, repartidores, onGuardar, onCerr
 
 function lineaFactura(it) {
   const numero = it.presentacion?.split(" ")[1] || "";
-  const sufijo = it.estado === "Frito" ? "Fritos" : "Congelados";
+  const sufijo = preparacionDe(it) === "Frito" ? "Fritos" : "Congelados";
   return `Bandeja ${it.nombreProducto} ${numero} - ${sufijo}`;
 }
 
@@ -349,11 +361,9 @@ const TICKET_ANCHO_MM = 80;
 
 function TicketPedido({ pedido, repartidores, onCerrar }) {
   const ac = ACENTOS.pedidos;
-  const envio = parseFloat(pedido.envio) || 0;
-  const servicio = parseFloat(pedido.servicio) || 0;
-  const productos = (pedido.items || []).reduce((t, it) => t + (it.subtotal || 0), 0);
-  const total = pedido.total || productos + envio + servicio;
-  const repartidor = repartidores?.find(r => r.id === pedido.repartidorId)?.nombre;
+  const { productos, servicio, envio, total } = totalesPedido(pedido);
+  const fritas = bandejasFritas(pedido);
+  const repartidor = quienEntrega(pedido, repartidores);
   const domicilio = pedido.tipoEntrega === "Domicilio";
   const euros = n => (n || 0).toFixed(2) + " EUR";
 
@@ -397,17 +407,17 @@ function TicketPedido({ pedido, repartidores, onCerrar }) {
         {domicilio
           ? <div style={{ marginTop: 2 }}>Direccion: {pedido.direccion} {pedido.cp}</div>
           : <div style={{ marginTop: 2 }}>RECOGIDA EN TIENDA</div>}
-        {repartidor && <Fila izq="Reparto" der={repartidor} />}
+        <Fila izq="Reparto" der={repartidor} />
         <Raya />
         {(pedido.items || []).map((it, i) => (
           <div key={i} style={{ marginBottom: 4 }}>
             <div>{it.cantidad}x {it.nombreProducto}</div>
-            <Fila izq={`   ${it.presentacion} · ${it.estado || ""}`} der={euros(it.subtotal)} />
+            <Fila izq={`   ${it.presentacion} · ${preparacionDe(it)}`} der={euros(it.subtotal)} />
           </div>
         ))}
         <Raya />
         <Fila izq="Productos" der={euros(productos)} />
-        {servicio > 0 && <Fila izq="Fritura" der={euros(servicio)} />}
+        {servicio > 0 && <Fila izq={fritas ? `Fritura (${fritas})` : "Fritura"} der={euros(servicio)} />}
         {envio > 0 && <Fila izq="Envio" der={euros(envio)} />}
         <div style={{ borderTop: "1px solid #000", margin: "6px 0" }} />
         <Fila izq="TOTAL" der={euros(total)} fuerte />
@@ -432,7 +442,7 @@ function TicketPedido({ pedido, repartidores, onCerrar }) {
 
 function FacturaPedido({ pedido, onCerrar }) {
   const ac = ACENTOS.pedidos;
-  const envio = parseFloat(pedido.envio) || 0;
+  const { servicio, envio, total } = totalesPedido(pedido);
   return (
     <Modal title="🧾 Factura" accent={ac} onClose={onCerrar}>
       <div id="factura-imprimible">
@@ -446,6 +456,12 @@ function FacturaPedido({ pedido, onCerrar }) {
             <span style={{ color: TEXT_MAIN, fontSize: 14, fontWeight: 700 }}>{(it.subtotal || 0).toFixed(2)}€</span>
           </div>
         ))}
+        {servicio > 0 && (
+          <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #25262f" }}>
+            <span style={{ color: TEXT_MAIN, fontSize: 14 }}>Fritura</span>
+            <span style={{ color: TEXT_MAIN, fontSize: 14, fontWeight: 700 }}>{servicio.toFixed(2)}€</span>
+          </div>
+        )}
         {envio > 0 && (
           <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #25262f" }}>
             <span style={{ color: TEXT_MAIN, fontSize: 14 }}>Envío</span>
@@ -454,7 +470,7 @@ function FacturaPedido({ pedido, onCerrar }) {
         )}
         <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 0 0" }}>
           <span style={{ color: ac, fontSize: 16, fontWeight: 800 }}>TOTAL</span>
-          <span style={{ color: ac, fontSize: 16, fontWeight: 800 }}>{(pedido.total || 0).toFixed(2)}€</span>
+          <span style={{ color: ac, fontSize: 16, fontWeight: 800 }}>{total.toFixed(2)}€</span>
         </div>
       </div>
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
@@ -483,7 +499,7 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
       setProductos(prods => prods.map(prod => ({
         ...prod,
         variantes: prod.variantes.map(v => {
-          const it = p.items.find(i => parseInt(i.productoId) === prod.id && i.presentacion === v.presentacion);
+          const it = p.items.find(i => String(i.productoId) === String(prod.id) && i.presentacion === v.presentacion);
           if (!it) return v;
           const nuevosLotes = deductFIFO(v.lotes || [], it.cantidad);
           return { ...v, lotes: nuevosLotes, stock: stockTotal(nuevosLotes) };
@@ -538,7 +554,7 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
             <span style={{ color: TEXT_SUB, fontSize: 12 }}>{delDia.length} pedido{delDia.length > 1 ? "s" : ""}</span>
             <span style={{ flex: 1, height: 1, background: BORDER }} />
             <span style={{ color: TEXT_SUB, fontSize: 12, fontWeight: 700 }}>
-              {delDia.reduce((t, x) => t + (x.total || 0), 0).toFixed(2)}€
+              {delDia.reduce((t, x) => t + totalesPedido(x).total, 0).toFixed(2)}€
             </span>
           </div>
           {delDia.map(p => {
@@ -560,7 +576,7 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
                   </p>
                 </div>
                 <div style={{ textAlign: "right" }}>
-                  {p.total > 0 && <p style={{ color: ac, fontWeight: 800, margin: "0 0 4px", fontSize: 15 }}>{p.total.toFixed(2)}€</p>}
+                  <p style={{ color: ac, fontWeight: 800, margin: "0 0 4px", fontSize: 15 }}>{totalesPedido(p).total.toFixed(2)}€</p>
                   <Badge estado={p.estado} />
                 </div>
               </div>
@@ -575,12 +591,13 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
                       <p style={{ color: TEXT_SUB, fontSize: 13, margin: "0 0 6px" }}>💳 {p.formaPago} · {p.tipoEntrega}</p>
                       {p.items?.map((it, i) => (
                         <span key={i} style={{ fontSize: 12, background: BORDER, borderRadius: 8, padding: "3px 9px", marginRight: 4, marginBottom: 4, display: "inline-block", color: TEXT_MAIN }}>
-                          {it.cantidad}x {it.nombreProducto} {it.presentacion} ({it.estado})
+                          {it.cantidad}x {it.nombreProducto} {it.presentacion} ({preparacionDe(it)})
                         </span>
                       ))}
-                      {(parseFloat(p.envio) || 0) > 0 && <p style={{ color: "#666", fontSize: 12, margin: "4px 0 0" }}>🚴 Envío: {(parseFloat(p.envio) || 0).toFixed(2)}€</p>}
-                      <p style={{ color: "#666", fontSize: 12, margin: "4px 0 0" }}>🛵 {repartidores.find(r => r.id === p.repartidorId)?.nombre || "Recoger en Tienda"}</p>
-                      {p.total > 0 && <p style={{ color: ac, fontWeight: 800, margin: "6px 0 0", fontSize: 15 }}>Total: {p.total.toFixed(2)}€</p>}
+                      {totalesPedido(p).servicio > 0 && <p style={{ color: "#666", fontSize: 12, margin: "4px 0 0" }}>🔥 Fritura: {totalesPedido(p).servicio.toFixed(2)}€</p>}
+                      {totalesPedido(p).envio > 0 && <p style={{ color: "#666", fontSize: 12, margin: "4px 0 0" }}>🚴 Envío: {totalesPedido(p).envio.toFixed(2)}€</p>}
+                      <p style={{ color: "#666", fontSize: 12, margin: "4px 0 0" }}>🛵 {quienEntrega(p, repartidores)}</p>
+                      <p style={{ color: ac, fontWeight: 800, margin: "6px 0 0", fontSize: 15 }}>Total: {totalesPedido(p).total.toFixed(2)}€</p>
                     </div>
                     <div style={{ display: "flex", gap: 6 }}>
                       <Btn small variant="secondary" onClick={() => { setEditar(p); setModal(true); }}>✏️</Btn>
@@ -739,10 +756,10 @@ function ModuloRutas({ pedidos }) {
                   <p style={{ color: TEXT_SUB, fontSize: 13, margin: "0 0 4px" }}>⏰ {p.rangoHorario || "Sin horario"} · 💳 {p.formaPago}</p>
                   {p.items?.map((it, i) => (
                     <span key={i} style={{ fontSize: 11, background: "#1f2028", borderRadius: 8, padding: "2px 7px", marginRight: 4, color: TEXT_SUB }}>
-                      {it.cantidad}x {it.nombreProducto} ({it.estado})
+                      {it.cantidad}x {it.nombreProducto} ({preparacionDe(it)})
                     </span>
                   ))}
-                  {p.total > 0 && <p style={{ color: ac, fontWeight: 800, margin: "6px 0 0", fontSize: 14 }}>{p.total.toFixed(2)}€</p>}
+                  <p style={{ color: ac, fontWeight: 800, margin: "6px 0 0", fontSize: 14 }}>{totalesPedido(p).total.toFixed(2)}€</p>
                 </div>
                 <Badge estado={p.estado} />
               </div>
@@ -788,7 +805,7 @@ function ModuloClientes({ clientes, setClientes, pedidos, irInicio }) {
 
       {filtrados.length === 0 ? <Empty texto="No hay clientes registrados" /> : filtrados.map(c => {
         const historial = pedidos.filter(p => p.telefono === c.telefono);
-        const totalGastado = historial.reduce((s, p) => s + (p.total || 0), 0);
+        const totalGastado = historial.reduce((s, p) => s + totalesPedido(p).total, 0);
         return (
           <Card key={c.id} accent={ac}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -1463,7 +1480,7 @@ function ModuloReporte({ pedidos, compras, gastos, producciones, trabajadoras, i
   const comprasRango = compras.filter(c => enRango(c.fecha));
   const gastosRango = gastos.filter(g => enRango(g.fecha));
 
-  const ingresos = pedidosRango.reduce((s, p) => s + (p.total || 0), 0);
+  const ingresos = pedidosRango.reduce((s, p) => s + totalesPedido(p).total, 0);
   const costoMateriaPrima = comprasRango.reduce((s, c) => s + (c.precio || 0), 0);
   const otrosGastos = gastosRango.reduce((s, g) => s + (g.monto || 0), 0);
   const beneficio = ingresos - costoMateriaPrima - otrosGastos;
@@ -1628,7 +1645,7 @@ function ModuloProduccion({ producciones, setProducciones, trabajadoras, setTrab
     setProductos(prods => prods.map(prod => ({
       ...prod,
       variantes: prod.variantes.map(v => {
-        const it = nueva.items.find(i => parseInt(i.productoId) === prod.id && i.presentacion === v.presentacion);
+        const it = nueva.items.find(i => String(i.productoId) === String(prod.id) && i.presentacion === v.presentacion);
         if (!it) return v;
         const nuevosLotes = [...(v.lotes || [])];
         const loteExistente = nuevosLotes.findIndex(l => l.fecha === nueva.fecha);
@@ -1676,7 +1693,7 @@ function ModuloProduccion({ producciones, setProducciones, trabajadoras, setTrab
       <div style={{ background: BG_CARD, border: "1px solid #1d1e26", borderRadius: 14, padding: 16, marginBottom: 12 }}>
         <label style={{ color: "#666", fontSize: 12, fontWeight: 700, textTransform: "uppercase", display: "block", marginBottom: 10 }}>Productos producidos</label>
         {form.items.map((it, i) => {
-          const prod = productos.find(p => p.id === parseInt(it.productoId));
+          const prod = productos.find(p => String(p.id) === String(it.productoId));
           return (
             <div key={i} style={{ background: BG_INPUT, borderRadius: 10, padding: 12, marginBottom: 8 }}>
               <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
@@ -1769,7 +1786,7 @@ function ModuloProduccion({ producciones, setProducciones, trabajadoras, setTrab
                   const uds = it.cantidad * unidadesPorPresentacion(it.presentacion);
                   return (
                     <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderTop: i > 0 ? `1px solid ${BORDER}` : "none" }}>
-                      <span style={{ color: TEXT_SUB, fontSize: 13 }}>{it.productoId ? (productos.find(p => p.id === parseInt(it.productoId))?.nombre || it.productoId) : "—"} · {it.presentacion}</span>
+                      <span style={{ color: TEXT_SUB, fontSize: 13 }}>{it.productoId ? (productos.find(p => String(p.id) === String(it.productoId))?.nombre || it.productoId) : "—"} · {it.presentacion}</span>
                       <span style={{ color: TEXT_MAIN, fontWeight: 700, fontSize: 13 }}>
                         {it.cantidad} band. = <span style={{ color: ac }}>{uds} uds</span>
                       </span>
@@ -2141,9 +2158,10 @@ export default function AppModerno() {
       "Forma pago": p.formaPago || "",
       "Rango horario": p.rangoHorario || "",
       Repartidor: repartidores.find(r => r.id === p.repartidorId)?.nombre || "",
-      Productos: (p.items || []).map(i => `${i.nombreProducto} ${i.presentacion} ×${i.cantidad}`).join(" | "),
-      "Envío (€)": p.envio || 0,
-      "Total (€)": (p.items || []).reduce((s, i) => s + (i.subtotal || 0), 0) + (parseFloat(p.envio) || 0),
+      Productos: (p.items || []).map(i => `${i.nombreProducto} ${i.presentacion} ×${i.cantidad} (${preparacionDe(i)})`).join(" | "),
+      "Fritura (€)": totalesPedido(p).servicio,
+      "Envío (€)": totalesPedido(p).envio,
+      "Total (€)": totalesPedido(p).total,
       Notas: p.notas || "",
     }));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filaPedidos), "Pedidos");
