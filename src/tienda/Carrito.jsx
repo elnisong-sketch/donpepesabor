@@ -5,12 +5,29 @@ import {
   conPlazo, fechaLegible, fechaMinima, hoyLocal, irAWhatsapp, nuevoCodigo, redactarMensaje, registrarEnHoja, totalesDe,
 } from './pedido.js'
 
+/**
+ * Datos del comprador guardados en SU propio móvil, para no reescribirlos cada vez.
+ * No salen de ahí: no se envían a ningún sitio ni los vemos nosotros. La fecha, la
+ * hora y la nota no se recuerdan, porque cambian en cada pedido.
+ */
+const CLAVE_DATOS = 'dps_datos_cliente'
+
+function datosGuardados() {
+  try {
+    const g = JSON.parse(localStorage.getItem(CLAVE_DATOS) || '{}')
+    return { nombre: g.nombre || '', prefijo: g.prefijo || '34', telefono: g.telefono || '',
+             direccion: g.direccion || '', cp: g.cp || '', formaPago: g.formaPago || '' }
+  } catch {
+    return { nombre: '', prefijo: '34', telefono: '', direccion: '', cp: '', formaPago: '' }
+  }
+}
+
 export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
   const [codigo] = useState(nuevoCodigo)
-  const [datos, setDatos] = useState({
+  const [datos, setDatos] = useState(() => ({
     tipoEntrega: 'Domicilio', fechaEntrega: hoyLocal(), horaDesde: '', horaHasta: '',
-    nombre: '', prefijo: '34', telefono: '', direccion: '', cp: '', formaPago: '', nota: '',
-  })
+    nota: '', ...datosGuardados(),
+  }))
   const [distancia, setDistancia] = useState(null)   // { km, tarifa }
   const [calculando, setCalculando] = useState(false)
   const [verMensaje, setVerMensaje] = useState(false)
@@ -80,6 +97,10 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
   async function finalizar() {
     if (falta || enviando) return
     setEnviando(true)
+    try {
+      const { nombre, prefijo, telefono, direccion, cp, formaPago } = datos
+      localStorage.setItem(CLAVE_DATOS, JSON.stringify({ nombre, prefijo, telefono, direccion, cp, formaPago }))
+    } catch { /* en modo privado no se puede guardar; da igual */ }
     try {
       await conPlazo(registrarEnHoja({ ...datos, telefono: telefonoCompleto, codigo }, carrito, envio))
     } catch (e) {

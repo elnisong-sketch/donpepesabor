@@ -250,6 +250,21 @@ function FormularioPedido({ productos, clientes, repartidores, onGuardar, onCerr
     if (c) setForm(f => ({ ...f, clienteId: id, nombre: c.nombre, telefono: c.telefono, direccion: c.direccion, cp: c.cp }));
   };
 
+  // Cliente que ya existe con ese teléfono (aunque esté escrito con prefijo o espacios).
+  const clientePorTelefono = clientes.find(
+    c => soloCifras(c.telefono).length >= 9 && soloCifras(c.telefono) === soloCifras(form.telefono)
+  );
+
+  const rellenarDesdeTelefono = () => {
+    if (!clientePorTelefono) return;
+    setForm(f => ({
+      ...f, clienteId: clientePorTelefono.id,
+      nombre: clientePorTelefono.nombre || f.nombre,
+      direccion: clientePorTelefono.direccion || f.direccion,
+      cp: clientePorTelefono.cp || f.cp,
+    }));
+  };
+
   return (
     <Modal title={pedidoEditar ? "Editar Pedido" : "Nuevo Pedido"} accent={ac} onClose={onCerrar}>
       <Select label="Cliente registrado (opcional)"
@@ -257,6 +272,14 @@ function FormularioPedido({ productos, clientes, repartidores, onGuardar, onCerr
         value={form.clienteId} onChange={e => selCliente(e.target.value)} />
       <Input label="Nombre y Apellido *" value={form.nombre} onChange={e => set("nombre", e.target.value)} placeholder="Ej: María González" />
       <Input label="Teléfono *" value={form.telefono} onChange={e => set("telefono", e.target.value)} placeholder="+34 6XX XXX XXX" />
+      {clientePorTelefono && clientePorTelefono.id !== form.clienteId && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "-6px 0 12px" }}>
+          <span style={{ color: ACENTOS.clientes, fontSize: 12, fontWeight: 700 }}>
+            Ya es cliente: {clientePorTelefono.nombre}
+          </span>
+          <Btn small variant="secondary" onClick={rellenarDesdeTelefono}>Traer sus datos</Btn>
+        </div>
+      )}
       <Input label="Dirección *" value={form.direccion} onChange={e => set("direccion", e.target.value)} placeholder="Calle, número, piso" />
       <Input label="Código Postal *" value={form.cp} onChange={e => set("cp", e.target.value)} placeholder="28XXX" />
       <Chips label="Tipo de entrega" accent={ac} options={["Domicilio", "Recogida"]} value={form.tipoEntrega} onChange={v => cambiarTipoEntrega(v)} />
@@ -506,7 +529,7 @@ function FacturaPedido({ pedido, onCerrar }) {
   );
 }
 
-function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes, repartidores }) {
+function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes, setClientes, repartidores }) {
   const ac = ACENTOS.pedidos;
   const [modal, setModal] = useState(false);
   const [editar, setEditar] = useState(null);
@@ -520,6 +543,27 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
   const guardar = (p) => {
     const esNuevo = !editar;
     setPedidos(prev => esNuevo ? [p, ...prev] : prev.map(x => x.id === p.id ? p : x));
+
+    // La ficha del cliente se crea o se actualiza sola con lo que traiga el pedido.
+    const cifras = soloCifras(p.telefono);
+    if (cifras.length >= 9) {
+      setClientes(cs => {
+        const i = cs.findIndex(c => soloCifras(c.telefono) === cifras);
+        if (i === -1) {
+          return [...cs, { id: generarId(), nombre: p.nombre || "", telefono: p.telefono || "",
+                           direccion: p.direccion || "", cp: p.cp || "" }];
+        }
+        const actual = cs[i];
+        const copia = [...cs];
+        copia[i] = {
+          ...actual,
+          nombre: actual.nombre || p.nombre || "",
+          direccion: p.direccion || actual.direccion || "",
+          cp: p.cp || actual.cp || "",
+        };
+        return copia;
+      });
+    }
     if (esNuevo) {
       setProductos(prods => prods.map(prod => ({
         ...prod,
@@ -1089,6 +1133,11 @@ const ETIQUETAS_WEB = [
 const CATEGORIAS_PRODUCTO = ["Tequeños", "Empanadas", "Pastelitos", "Otros"];
 
 // Extrae el número de unidades de una presentación (ej: "Bandeja 25" → 25, "Bandeja 50" → 50, "Unidad" → 1)
+/** Solo las cifras, para comparar teléfonos escritos de mil maneras. */
+function soloCifras(tel = "") {
+  return String(tel).replace(/\D/g, "").replace(/^34/, "");
+}
+
 function unidadesPorPresentacion(presentacion = "") {
   const m = presentacion.match(/\d+/);
   return m ? parseInt(m[0]) : 1;
@@ -2526,7 +2575,7 @@ export default function AppModerno() {
       {/* Contenido */}
       <div className="main-content" style={{ maxWidth: 760, margin: "0 auto" }} onClickCapture={bloquearClick}>
         {tab === "inicio" && <ModuloBienvenida setTab={setTab} pendientes={pendientes} hoyEntregas={hoyEntregas} />}
-        {tab === "pedidos" && <ModuloPedidos pedidos={pedidos} setPedidos={setPedidos} productos={productos} setProductos={setProductos} clientes={clientes} repartidores={repartidores} />}
+        {tab === "pedidos" && <ModuloPedidos pedidos={pedidos} setPedidos={setPedidos} productos={productos} setProductos={setProductos} clientes={clientes} setClientes={setClientes} repartidores={repartidores} />}
         {tab === "clientes" && <ModuloClientes clientes={clientes} setClientes={setClientes} pedidos={pedidos} />}
         {tab === "inventario" && <ModuloInventario productos={productos} setProductos={setProductos} />}
         {tab === "mostrador" && <ModuloMostrador productos={productos} setProductos={setProductos} jornadas={jornadas} setJornadas={setJornadas} />}
