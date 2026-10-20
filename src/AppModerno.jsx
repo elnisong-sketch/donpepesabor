@@ -503,8 +503,10 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
 
   const filtrados = pedidos
     .filter(p => (filtroEstado === "Todos" || p.estado === filtroEstado) && (!filtroFecha || p.fecha === filtroFecha))
+    // Día más reciente primero; dentro del día, por estado (pendientes arriba) y luego por hora.
     .sort((a, b) =>
       String(b.fecha || "").localeCompare(String(a.fecha || "")) ||
+      ESTADOS_PEDIDO.indexOf(a.estado) - ESTADOS_PEDIDO.indexOf(b.estado) ||
       String(a.rangoHorario || "~").localeCompare(String(b.rangoHorario || "~"))
     );
 
