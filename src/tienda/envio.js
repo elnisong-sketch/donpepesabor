@@ -15,9 +15,26 @@ export function tarifaPorKm(km) {
   return 10
 }
 
-const enMadrid = (r) =>
-  parseFloat(r.lat) > 40.2 && parseFloat(r.lat) < 40.7 &&
-  parseFloat(r.lon) > -4.0 && parseFloat(r.lon) < -3.4
+/**
+ * Hay nombres de calle repetidos por toda la provincia: "Calle Toledo 20" existe en
+ * el centro de Madrid, en Parla y en Getafe. Antes se cogía el primer resultado que
+ * cayera dentro de la Comunidad y salían 22 km por una dirección del centro, así que
+ * manda el código postal que ha escrito el cliente.
+ */
+function mejorResultado(resultados, cp) {
+  const lista = Array.isArray(resultados) ? resultados : []
+  const porCp = lista.find((r) => r.address?.postcode === cp)
+  if (porCp) return porCp
+
+  const municipio = (r) =>
+    r.address?.city || r.address?.town || r.address?.village || r.address?.municipality || ''
+  return lista.find((r) => municipio(r).toLowerCase() === 'madrid') || null
+}
+
+async function buscar(params) {
+  const r = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, { headers: { 'Accept-Language': 'es' } })
+  return r.ok ? r.json() : []
+}
 
 async function kmHasta(lat, lon) {
   const ruta = await fetch(`https://router.project-osrm.org/route/v1/driving/${ORIGEN_LON},${ORIGEN_LAT};${lon},${lat}?overview=false`)
@@ -26,25 +43,34 @@ async function kmHasta(lat, lon) {
   return datos.routes[0].distance / 1000
 }
 
-/** Devuelve { km, tarifa } o null si no se pudo calcular. */
+/** Devuelve { km, tarifa, aproximado } o null si no se pudo calcular. */
 export async function calcularEnvio(direccion, cp) {
   try {
-    const q = encodeURIComponent(`${direccion}, ${cp}, Madrid, España`)
-    const geo = await fetch(`https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=5&countrycodes=es`,
-      { headers: { 'Accept-Language': 'es' } })
-    let punto = (await geo.json()).find(enMadrid)
+    // Por campos separados (calle / código postal), que acierta bastante más.
+    let punto = mejorResultado(await buscar(new URLSearchParams({
+      street: direccion, postalcode: cp, country: 'España', countrycodes: 'es',
+      format: 'json', addressdetails: '1', limit: '8',
+    })), cp)
 
-    // Si la calle no aparece, se usa el centro del código postal.
+    // Si no, en texto libre, por si la dirección viene desordenada.
     if (!punto) {
-      const geoCP = await fetch(`https://nominatim.openstreetmap.org/search?postalcode=${cp}&country=es&format=json&limit=1`,
-        { headers: { 'Accept-Language': 'es' } })
-      punto = (await geoCP.json())[0]
+      punto = mejorResultado(await buscar(new URLSearchParams({
+        q: `${direccion}, ${cp}, Madrid, España`, countrycodes: 'es',
+        format: 'json', addressdetails: '1', limit: '8',
+      })), cp)
+    }
+
+    // Último recurso: el centro del código postal. La distancia sale aproximada.
+    let aproximado = false
+    if (!punto) {
+      punto = (await buscar(new URLSearchParams({ postalcode: cp, country: 'es', format: 'json', limit: '1' })))[0]
+      aproximado = true
       if (!punto) return null
     }
 
     const km = await kmHasta(punto.lat, punto.lon)
     if (km == null) return null
-    return { km: Math.round(km * 10) / 10, tarifa: tarifaPorKm(km) }
+    return { km: Math.round(km * 10) / 10, tarifa: tarifaPorKm(km), aproximado }
   } catch {
     return null
   }
