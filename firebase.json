@@ -1,26 +1,50 @@
 {
-  "hosting": {
-    "site": "donpepesabor-tienda",
-    "public": "dist",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
-    "rewrites": [{ "source": "**", "destination": "/index.html" }],
-    "headers": [
-      {
-        "comment": "Los ficheros con hash en el nombre no cambian nunca: se cachean para siempre.",
-        "source": "**/*.@(js|css|png|jpg|jpeg|webp|svg|ico|woff|woff2)",
-        "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
-      },
-      {
-        "comment": "El HTML cambia en cada publicación; sin esto el cliente vería la tienda de ayer.",
-        "source": "/",
-        "headers": [{ "key": "Cache-Control", "value": "no-cache, max-age=0" }]
-      },
-      {
-        "source": "**/*.html",
-        "headers": [{ "key": "Cache-Control", "value": "no-cache, max-age=0" }]
-      }
-    ]
-  },
+  "hosting": [
+    {
+      "comment": "Tienda pública. Es la misma aplicación en los dos sitios: src/main.jsx mira el dominio y decide si enseña la tienda o la gestión (que pide contraseña).",
+      "site": "donpepesabor-tienda",
+      "public": "dist",
+      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+      "rewrites": [{ "source": "**", "destination": "/index.html" }],
+      "headers": [
+        {
+          "comment": "Los ficheros con hash en el nombre no cambian nunca: se cachean para siempre.",
+          "source": "**/*.@(js|css|png|jpg|jpeg|webp|svg|ico|woff|woff2)",
+          "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+        },
+        {
+          "comment": "El HTML cambia en cada publicación; sin esto el cliente vería la tienda de ayer.",
+          "source": "/",
+          "headers": [{ "key": "Cache-Control", "value": "no-cache, max-age=0" }]
+        },
+        {
+          "source": "**/*.html",
+          "headers": [{ "key": "Cache-Control", "value": "no-cache, max-age=0" }]
+        }
+      ]
+    },
+    {
+      "comment": "Gestión interna y app del repartidor (con ?repartidor).",
+      "site": "donpepesabor-gestion",
+      "public": "dist",
+      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+      "rewrites": [{ "source": "**", "destination": "/index.html" }],
+      "headers": [
+        {
+          "source": "**/*.@(js|css|png|jpg|jpeg|webp|svg|ico|woff|woff2)",
+          "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+        },
+        {
+          "source": "/",
+          "headers": [{ "key": "Cache-Control", "value": "no-cache, max-age=0" }]
+        },
+        {
+          "source": "**/*.html",
+          "headers": [{ "key": "Cache-Control", "value": "no-cache, max-age=0" }]
+        }
+      ]
+    }
+  ],
   "firestore": {
     "rules": "firestore.rules"
   }
