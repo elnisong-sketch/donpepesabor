@@ -14,7 +14,21 @@ const NAVY   = "#1e3a5f";
 const hostname = window.location.hostname;
 const params   = new URLSearchParams(window.location.search);
 
-const esPublico     = hostname.includes("donpepesabor") || params.has("tienda");
+/**
+ * Direcciones donde vive la TIENDA, una por una.
+ *
+ * Antes bastaba con que el dominio contuviera "donpepesabor", pero al renombrar la
+ * gestión a un dominio de la marca (donpepesabor-gestion…) habría salido la tienda
+ * en su lugar. Si algún día se añade otra dirección pública, va en esta lista;
+ * cualquier dominio que no esté aquí muestra la gestión, que pide contraseña.
+ */
+const HOSTS_TIENDA = [
+  "donpepesabor.vercel.app",
+  "donpepesabor-tienda.web.app",
+  "donpepesabor-tienda.firebaseapp.com",
+];
+
+const esPublico     = HOSTS_TIENDA.includes(hostname) || params.has("tienda");
 const esRepartidor  = params.has("repartidor");
 
 function mensajeError(code) {

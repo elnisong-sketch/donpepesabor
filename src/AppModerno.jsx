@@ -2426,7 +2426,7 @@ export default function AppModerno() {
     const blob = new Blob([JSON.stringify(datos, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `elnisong-backup-${hoy()}.json`;
+    a.download = `donpepesabor-backup-${hoy()}.json`;
     a.click();
   };
 
@@ -2517,7 +2517,7 @@ export default function AppModerno() {
     }));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filaGastos), "Gastos");
 
-    XLSX.writeFile(wb, `elnisong-${hoy()}.xlsx`);
+    XLSX.writeFile(wb, `donpepesabor-${hoy()}.xlsx`);
   };
 
   const soloVista = new URLSearchParams(window.location.search).has("preview");

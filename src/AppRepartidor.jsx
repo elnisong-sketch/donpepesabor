@@ -110,7 +110,7 @@ export default function AppRepartidor() {
     return (
       <div style={{ minHeight: "100vh", background: "#f0f4f8", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "'Inter', sans-serif" }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>👨‍🍳</div>
-        <p style={{ color: "#1e3a5f", fontSize: 18, fontWeight: 700, margin: 0 }}>ELNISONG</p>
+        <p style={{ color: "#1e3a5f", fontSize: 18, fontWeight: 700, margin: 0 }}>DON PEPE SABOR</p>
         <p style={{ color: "#64748b", fontSize: 13, marginTop: 8 }}>Conectando...</p>
       </div>
     );
@@ -161,7 +161,7 @@ export default function AppRepartidor() {
         {/* Header igual que app principal */}
         <div style={{ background: NAVY, padding: "14px 20px", boxShadow: "0 2px 12px #0003" }}>
           <div style={{ maxWidth: 480, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <h1 style={{ color: "#fff", margin: 0, fontSize: 22, fontWeight: 900, letterSpacing: -0.5 }}>👨‍🍳 ELNISONG</h1>
+            <h1 style={{ color: "#fff", margin: 0, fontSize: 22, fontWeight: 900, letterSpacing: -0.5 }}>👨‍🍳 DON PEPE SABOR</h1>
             <span style={{ background: "#ffffff22", borderRadius: 10, color: "#94b4d4", padding: "6px 12px", fontSize: 12, fontWeight: 700 }}>🛵 Repartidores</span>
           </div>
         </div>
