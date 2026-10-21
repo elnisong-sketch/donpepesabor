@@ -67,7 +67,7 @@ function Login({ subtitulo }) {
     <div style={{ minHeight: "100vh", background: "#f0f4f8", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "'Inter', sans-serif", padding: 24 }}>
       <div style={{ background: "#fff", borderRadius: 20, padding: "40px 32px", maxWidth: 360, width: "100%", boxShadow: "0 4px 32px #0002", textAlign: "center" }}>
         <div style={{ fontSize: 48, marginBottom: 12 }}>🔐</div>
-        <h1 style={{ color: NAVY, fontSize: 20, fontWeight: 900, margin: "0 0 4px" }}>Inversiones Ayala 1992</h1>
+        <h1 style={{ color: NAVY, fontSize: 20, fontWeight: 900, margin: "0 0 4px" }}>Don Pepe Sabor</h1>
         <p style={{ color: "#64748b", fontSize: 13, margin: "0 0 28px" }}>{subtitulo}</p>
 
         <input
@@ -95,7 +95,7 @@ function Login({ subtitulo }) {
           {cargando ? "Entrando…" : "Entrar"}
         </button>
 
-        <p style={{ color: "#cbd5e1", fontSize: 11, marginTop: 24 }}>Don Pepe Sabor · Sistema de gestión</p>
+        <p style={{ color: "#cbd5e1", fontSize: 11, marginTop: 24 }}>Inversiones Ayala 1992 · Sistema de gestión</p>
       </div>
     </div>
   );
