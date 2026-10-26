@@ -9,7 +9,14 @@ const AppModerno    = lazy(() => import('./AppModerno.jsx'))
 const AppRepartidor = lazy(() => import('./AppRepartidor.jsx'))
 const Tienda        = lazy(() => import('./tienda/Tienda.jsx'))
 
-const NAVY   = "#1e3a5f";
+// Los mismos colores y tipografías que la tienda y la gestión.
+const MARRON = "#2a1200";
+const VINO   = "#8a1f1f";
+const ORO    = "#e8a317";
+const CREMA  = "#fbf4e8";
+const CREMA2 = "#efe1c8";
+const TINTA  = "#2b1a10";
+const TINTA2 = "#6f5a4a";
 
 const hostname = window.location.hostname;
 const params   = new URLSearchParams(window.location.search);
@@ -61,14 +68,16 @@ function Login({ subtitulo }) {
     }
   };
 
-  const estiloInput = { width: "100%", padding: "13px 16px", border: `2px solid ${error ? "#ef4444" : "#e2e8f0"}`, borderRadius: 12, fontSize: 16, fontFamily: "inherit", outline: "none", boxSizing: "border-box", marginBottom: 12 };
+  const estiloInput = { width: "100%", padding: "13px 15px", background: CREMA, border: `1.5px solid ${error ? "#b3261e" : CREMA2}`, borderRadius: 12, fontSize: 16, fontFamily: "inherit", color: TINTA, outline: "none", boxSizing: "border-box", marginBottom: 11 };
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f0f4f8", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "'Inter', sans-serif", padding: 24 }}>
-      <div style={{ background: "#fff", borderRadius: 20, padding: "40px 32px", maxWidth: 360, width: "100%", boxShadow: "0 4px 32px #0002", textAlign: "center" }}>
-        <div style={{ fontSize: 48, marginBottom: 12 }}>🔐</div>
-        <h1 style={{ color: NAVY, fontSize: 20, fontWeight: 900, margin: "0 0 4px" }}>Don Pepe Sabor</h1>
-        <p style={{ color: "#64748b", fontSize: 13, margin: "0 0 28px" }}>{subtitulo}</p>
+    <div style={{ minHeight: "100vh", background: CREMA, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "'Manrope', system-ui, sans-serif", color: TINTA, padding: 24 }}>
+      <div style={{ background: "#fff", border: `1px solid ${CREMA2}`, borderRadius: 20, padding: "34px 30px", maxWidth: 360, width: "100%", boxShadow: "0 18px 50px rgba(42,18,0,.12)", textAlign: "center" }}>
+        <img src="/logo-donpepe.png" alt="" style={{ width: 86, height: 86, objectFit: "contain", margin: "0 auto 14px", display: "block" }} />
+        <h1 style={{ fontFamily: "'Archivo', system-ui, sans-serif", color: MARRON, fontSize: 23, fontWeight: 800, margin: "0 0 3px" }}>
+          Don Pepe <span style={{ color: VINO }}>Sabor</span>
+        </h1>
+        <p style={{ color: TINTA2, fontSize: 10.5, letterSpacing: ".18em", textTransform: "uppercase", fontWeight: 700, margin: "0 0 26px" }}>{subtitulo}</p>
 
         <input
           type="email"
@@ -89,24 +98,30 @@ function Login({ subtitulo }) {
           style={estiloInput}
         />
 
-        {error && <p style={{ color: "#ef4444", fontSize: 13, fontWeight: 600, margin: "0 0 12px" }}>{error}</p>}
+        {error && <p style={{ color: "#b3261e", fontSize: 13, fontWeight: 700, margin: "0 0 12px" }}>{error}</p>}
 
-        <button onClick={intentar} disabled={cargando} style={{ width: "100%", background: NAVY, border: "none", borderRadius: 50, color: "#fff", padding: "14px", fontSize: 16, fontWeight: 700, cursor: cargando ? "wait" : "pointer", opacity: cargando ? 0.7 : 1 }}>
+        <button onClick={intentar} disabled={cargando} style={{ width: "100%", background: VINO, border: "none", borderRadius: 12, color: "#fff", padding: "15px", fontFamily: "'Archivo', system-ui, sans-serif", fontSize: 14, fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase", cursor: cargando ? "wait" : "pointer", opacity: cargando ? 0.7 : 1 }}>
           {cargando ? "Entrando…" : "Entrar"}
         </button>
 
-        <p style={{ color: "#cbd5e1", fontSize: 11, marginTop: 24 }}>Inversiones Ayala 1992 · Sistema de gestión</p>
+        <p style={{ color: "#a8968a", fontSize: 11, marginTop: 22 }}>Inversiones Ayala 1992 · Sistema de gestión</p>
       </div>
     </div>
   );
 }
 
+/**
+ * Botón de cerrar sesión.
+ *
+ * Va abajo a la DERECHA: a la izquierda se montaba encima del pie del menú
+ * lateral y tapaba el correo de quien ha entrado.
+ */
 function BotonSalir() {
   return (
     <button
       onClick={() => signOut(auth)}
       title="Cerrar sesión"
-      style={{ position: "fixed", bottom: 12, left: 12, zIndex: 9999, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 50, color: "#64748b", padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", boxShadow: "0 2px 8px #0001" }}
+      style={{ position: "fixed", bottom: 12, right: 12, zIndex: 9999, background: "#fff", border: "1px solid #efe1c8", borderRadius: 50, color: "#6f5a4a", padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: "0 2px 10px rgba(42,18,0,.12)" }}
     >
       Salir
     </button>

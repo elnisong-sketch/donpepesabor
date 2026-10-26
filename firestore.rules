@@ -4,11 +4,13 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Solo estos correos pueden entrar.
+    // Solo estos correos pueden entrar. Quien no esté aquí no ve nada, aunque
+    // tenga cuenta: crear el usuario no basta, hay que añadirlo a esta lista.
     function autorizado() {
       return request.auth != null
         && request.auth.token.email in [
-          'elnisong@gmail.com'
+          'elnisong@gmail.com',
+          'donpepesabor@gmail.com'
         ];
     }
 
@@ -16,6 +18,41 @@ service cloud.firestore {
     match /datos/productos {
       allow read: if true;
       allow write: if autorizado();
+    }
+
+    /**
+     * Agenda de huecos de reparto, para que la tienda sepa qué franjas están
+     * llenas. Solo contiene fechas y cuántos repartos hay en cada franja:
+     * ningún nombre, teléfono, dirección ni importe. Los pedidos en sí siguen
+     * siendo privados, y eso no cambia.
+     */
+    match /datos/agenda {
+      allow read: if true;
+      allow write: if autorizado();
+    }
+
+    /**
+     * Bandeja de entrada de los pedidos hechos en la tienda.
+     *
+     * Cualquiera puede DEJAR un pedido (la tienda es pública y el cliente no tiene
+     * cuenta), pero nadie de fuera puede leer los de los demás, cambiarlos ni
+     * borrarlos: eso solo la gestión. Por eso los pedidos de la web no entran
+     * directos en la lista, sino que el dueño los acepta uno a uno.
+     *
+     * Los topes son para que un gracioso no llene la base de datos: un pedido
+     * razonable no pasa de 40 líneas ni de un nombre de 80 letras.
+     */
+    match /pedidosWeb/{pedido} {
+      allow create: if request.resource.data.keys().hasAll(['nombre', 'telefono', 'items'])
+        && request.resource.data.nombre is string
+        && request.resource.data.nombre.size() > 0
+        && request.resource.data.nombre.size() <= 80
+        && request.resource.data.telefono is string
+        && request.resource.data.telefono.size() <= 30
+        && request.resource.data.items is list
+        && request.resource.data.items.size() > 0
+        && request.resource.data.items.size() <= 40;
+      allow read, update, delete: if autorizado();
     }
 
     // Todo lo demás: solo con sesión autorizada.

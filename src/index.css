@@ -35,7 +35,7 @@ input, select, textarea {
 /* Padding inferior del contenido para no quedar bajo la barra */
 .main-content {
   padding: 20px 16px;
-  padding-bottom: calc(90px + env(safe-area-inset-bottom));
+  padding-bottom: calc(28px + env(safe-area-inset-bottom));
 }
 
 /* Modales: padding seguro para notch */

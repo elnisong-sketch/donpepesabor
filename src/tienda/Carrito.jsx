@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { COSTO_FRITO, DIRECCION_LOCAL, PAGOS, PREFIJOS, etiquetaPrep, eur, unidades } from './catalogo.js'
+import { getDoc, doc } from 'firebase/firestore'
+import { db } from '../firebase.js'
+import { FRANJAS, SIN_PREFERENCIA, huecosEn, sinReparto, textoFranja } from '../franjas.js'
+import { DIRECCION_LOCAL, PAGOS, PREFIJOS, etiquetaPrep, eur, unidades } from './catalogo.js'
 import { TARIFA_BASE, TEXTO_TARIFAS, calcularEnvio } from './envio.js'
 import {
-  conPlazo, fechaLegible, fechaMinima, hoyLocal, irAWhatsapp, nuevoCodigo, redactarMensaje, registrarEnHoja, totalesDe,
+  conPlazo, fechaLegible, fechaMinima, hoyLocal, irAWhatsapp, nuevoCodigo, porEncargoDe, redactarMensaje, registrarEnNube, totalesDe,
 } from './pedido.js'
 
 /**
@@ -25,14 +28,29 @@ function datosGuardados() {
 export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
   const [codigo] = useState(nuevoCodigo)
   const [datos, setDatos] = useState(() => ({
-    tipoEntrega: 'Domicilio', fechaEntrega: hoyLocal(), horaDesde: '', horaHasta: '',
+    tipoEntrega: 'Domicilio', fechaEntrega: hoyLocal(), franja: '',
     nota: '', ...datosGuardados(),
   }))
   const [distancia, setDistancia] = useState(null)   // { km, tarifa }
+  const [agenda, setAgenda] = useState({})           // huecos ya ocupados, por día y franja
   const [direccion, setDireccion] = useState('vacia') // vacia | buscando | ok | no | sin-revisar
   const [calculando, setCalculando] = useState(false)
   const [verMensaje, setVerMensaje] = useState(false)
   const [enviando, setEnviando] = useState(false)
+
+  /**
+   * Huecos de reparto ya ocupados, que publica la gestión.
+   *
+   * Es un resumen con fechas y cuentas, nada de clientes. Si no se puede leer
+   * (sin conexión, o aún no se ha publicado), se sigue adelante con todo libre:
+   * perder un pedido por no poder contar huecos sería peor que doblar una franja.
+   */
+  useEffect(() => {
+    if (!abierto) return
+    getDoc(doc(db, 'datos', 'agenda'))
+      .then((s) => setAgenda(s.exists() ? JSON.parse(s.data().valor || '{}') : {}))
+      .catch(() => setAgenda({}))
+  }, [abierto])
 
   const domicilio = datos.tipoEntrega === 'Domicilio'
   const cpMadrid = /^28\d{3}$/.test(datos.cp.trim())
@@ -67,6 +85,7 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
 
   // Con productos por encargo, el primer día posible se mueve adelante.
   const minFecha = fechaMinima(carrito)
+  const encargo = porEncargoDe(carrito)
   useEffect(() => {
     if (datos.fechaEntrega < minFecha) setDatos((d) => ({ ...d, fechaEntrega: minFecha }))
   }, [minFecha, datos.fechaEntrega])
@@ -78,9 +97,9 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
   const falta = useMemo(() => {
     if (!carrito.length) return 'Añade al menos un producto'
     if (!datos.fechaEntrega) return 'Elige el día de entrega'
-    if (datos.fechaEntrega < minFecha) return 'Hay productos por encargo: elige un día más adelante'
-    if (!datos.horaDesde || !datos.horaHasta) return 'Indica la franja horaria'
-    if (datos.horaHasta <= datos.horaDesde) return 'La hora final debe ser posterior a la inicial'
+    if (datos.fechaEntrega < minFecha) return `${encargo} necesita 48 h: elige el ${fechaLegible(minFecha)} o un día posterior`
+    if (domicilio && sinReparto(datos.fechaEntrega)) return 'Los domingos no repartimos: elige otro día o pásate a recogerlo'
+    if (datos.franja && domicilio && huecosEn(agenda, datos.fechaEntrega, datos.franja) <= 0) return 'Esa franja se acaba de llenar: elige otra'
     if (!datos.nombre.trim()) return 'Escribe tu nombre'
     if (!tel) return 'Escribe tu teléfono'
     if (!telOk) return 'Revisa el teléfono: faltan o sobran números'
@@ -88,10 +107,9 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
     if (domicilio && !datos.cp.trim()) return 'Escribe el código postal'
     if (domicilio && !cpMadrid) return 'Solo repartimos en Madrid (código postal 28xxx)'
     if (domicilio && direccion === 'buscando') return 'Comprobando la dirección…'
-    if (domicilio && direccion === 'no') return 'No encontramos esa dirección: revisa la calle, el número y el código postal'
     if (!datos.formaPago) return 'Elige la forma de pago'
     return ''
-  }, [carrito.length, datos, domicilio, cpMadrid, tel, telOk, minFecha, direccion])
+  }, [carrito, datos, domicilio, cpMadrid, tel, telOk, minFecha, encargo, direccion])
 
   const mensaje = useMemo(
     () => redactarMensaje({ ...datos, telefono: telefonoCompleto, codigo }, carrito, envio, distancia),
@@ -114,10 +132,20 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
       const { nombre, prefijo, telefono, direccion, cp, formaPago } = datos
       localStorage.setItem(CLAVE_DATOS, JSON.stringify({ nombre, prefijo, telefono, direccion, cp, formaPago }))
     } catch { /* en modo privado no se puede guardar; da igual */ }
+    /**
+     * El pedido entra en la gestión y, acto seguido, se abre WhatsApp con el
+     * pedido escrito, como siempre. Si la nube falla o tarda, se sigue a WhatsApp
+     * igual: el mensaje es el aviso de verdad y ahí no se pierde el pedido.
+     *
+     * El plazo es largo (8 s) a propósito. La hoja de Google se mandaba con
+     * `keepalive` y terminaba sola aunque la página se fuera; esto no puede, así
+     * que al saltar a WhatsApp se cancelaría lo que quedara a medias. Mejor que
+     * el botón diga "Preparando…" un momento más que perder el pedido.
+     */
     try {
-      await conPlazo(registrarEnHoja({ ...datos, telefono: telefonoCompleto, codigo }, carrito, envio))
+      await conPlazo(registrarEnNube({ ...datos, telefono: telefonoCompleto, codigo }, carrito, envio, distancia), 8000)
     } catch (e) {
-      console.error('No se pudo registrar el pedido en la hoja; se sigue a WhatsApp.', e)
+      console.error('No se pudo dejar el pedido en la gestión; se sigue a WhatsApp.', e)
     }
     irAWhatsapp(mensaje)
   }
@@ -175,20 +203,54 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
 
               <div className="form-sec">
                 <h4>¿Cuándo?</h4>
+                {encargo && (
+                  <div className="note">
+                    ⏳ <strong>{encargo}</strong> se {carrito.filter((l) => l.horasEncargo > 0).length > 1 ? 'hacen' : 'hace'} por
+                    encargo, con <strong>48 horas</strong> de antelación. El primer día que podemos
+                    es el <strong>{fechaLegible(minFecha)}</strong>.
+                  </div>
+                )}
                 <div className="field">
                   <label htmlFor="fFecha">Día</label>
                   <input id="fFecha" type="date" min={minFecha} value={datos.fechaEntrega} onChange={cambiar('fechaEntrega')} />
                   {minFecha > hoyLocal() && (
-                    <span className="hint">Llevas productos por encargo: el primer día posible es el {fechaLegible(minFecha)}.</span>
+                    <span className="hint">El primer día posible es el {fechaLegible(minFecha)}.</span>
                   )}
                 </div>
-                <div className="field">
-                  <label>Franja horaria</label>
-                  <div className="franja">
-                    <input type="time" aria-label="Desde" value={datos.horaDesde} onChange={cambiar('horaDesde')} />
-                    <span>a</span>
-                    <input type="time" aria-label="Hasta" value={datos.horaHasta} onChange={cambiar('horaHasta')} />
+                {domicilio && sinReparto(datos.fechaEntrega) && (
+                  <div className="note aviso">
+                    Los <strong>domingos no repartimos</strong>. Elige otro día, o pásate
+                    a recogerlo por la tienda.
                   </div>
+                )}
+
+                <div className="field">
+                  <label>¿A qué hora te viene bien?</label>
+                  <div className="franjas">
+                    <button type="button"
+                      className={`franja-pick libre${!datos.franja ? ' on' : ''}`}
+                      onClick={() => poner('franja', '')}>
+                      <b>Me da igual la hora</b>
+                      <small>Te avisamos antes de salir</small>
+                    </button>
+
+                    {FRANJAS.map((f) => {
+                      const huecos = huecosEn(agenda, datos.fechaEntrega, f.id)
+                      const llena = domicilio && huecos <= 0
+                      return (
+                        <button key={f.id} type="button" disabled={llena}
+                          className={`franja-pick${datos.franja === f.id ? ' on' : ''}${llena ? ' llena' : ''}`}
+                          onClick={() => poner('franja', f.id)}>
+                          <b>{f.etiqueta}</b>
+                          {llena && <small>Completa</small>}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <span className="hint">
+                    La franja es <strong>orientativa</strong>: llegamos en algún momento dentro de
+                    esas dos horas, no a una hora exacta.
+                  </span>
                 </div>
               </div>
 
@@ -232,16 +294,16 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
                           <span>
                             {direccion === 'buscando' || calculando ? '📍 Comprobando la dirección…'
                               : direccion === 'ok' ? <>📍 <b>{distancia.km} km</b> hasta tu dirección</>
-                              : direccion === 'sin-revisar' ? 'No hemos podido comprobar la dirección; lo confirmamos contigo'
-                              : datos.direccion.trim().length < 5 ? 'Escribe tu dirección para calcular el envío'
-                              : '⚠️ No encontramos esa dirección'}
+                              : direccion === 'sin-revisar' || direccion === 'no' ? 'No hemos podido situarla en el mapa; lo confirmamos contigo'
+                              : 'Escribe tu dirección para calcular el envío'}
                           </span>
-                          {(direccion === 'ok' || direccion === 'sin-revisar') && <b>{eur(envio)}</b>}
+                          {direccion !== 'vacia' && !calculando && <b>{eur(envio)}</b>}
                         </div>
                         {direccion === 'no' && (
-                          <p className="hint warn">
-                            Revisa la calle, el número y el código postal. Si la dirección es correcta y sigue
-                            sin salir, haz el pedido por WhatsApp al 604 136 371.
+                          <p className="hint">
+                            Puedes enviar el pedido igualmente: te escribimos por WhatsApp para
+                            confirmar la dirección antes de salir. El envío sale a {eur(TARIFA_BASE)};
+                            si tu casa queda más lejos, te lo decimos antes de cobrarte.
                           </p>
                         )}
                       </>
@@ -268,7 +330,7 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
 
               <div className="totals">
                 <div><span>Productos ({bandejas} {bandejas === 1 ? 'bandeja' : 'bandejas'})</span><b>{eur(t.productos)}</b></div>
-                {t.fritura > 0 && <div><span>Fritura ({t.bandejasFritas} × {eur(COSTO_FRITO)})</span><b>{eur(t.fritura)}</b></div>}
+                {t.fritura > 0 && <div><span>Fritura ({t.bandejasFritas} {t.bandejasFritas === 1 ? 'bandeja' : 'bandejas'})</span><b>{eur(t.fritura)}</b></div>}
                 {domicilio && <div><span>Envío</span><b>{eur(t.envio)}</b></div>}
                 <div className="t-big"><span>Total</span><span>{eur(t.total)}</span></div>
               </div>

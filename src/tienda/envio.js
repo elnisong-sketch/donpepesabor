@@ -38,11 +38,32 @@ async function pedir(url, ms = 7000) {
 
 const ciudadDe = (p) => p.city || p.town || p.village || p.district || p.county || ''
 
-/** De los resultados, el que cuadre con el código postal; si no, uno de Madrid capital. */
+/** Distancia en línea recta desde la tienda, solo para ordenar candidatos. */
+function lejania(c) {
+  const dx = (c.lon - ORIGEN_LON) * 84
+  const dy = (c.lat - ORIGEN_LAT) * 111
+  return Math.sqrt(dx * dx + dy * dy)
+}
+
+/**
+ * Cuál de los resultados es la dirección del cliente.
+ *
+ * Antes se exigía que el código postal coincidiera EXACTO o que la ciudad se
+ * llamara "Madrid". Eso dejaba fuera a media provincia: una calle de Móstoles
+ * con un código postal que el mapa no tiene (o tiene el de al lado) se daba por
+ * inexistente y al cliente no se le dejaba pedir. Pasó de verdad.
+ *
+ * Ahora manda la cercanía: de todo lo que esté en la provincia (28xxx) o a menos
+ * de 40 km de la tienda, se coge lo más cerca. El código postal exacto solo sirve
+ * para desempatar, no para descartar.
+ */
 function elegir(candidatos, cp) {
-  return candidatos.find((c) => c.cp === cp)
-    || candidatos.find((c) => c.ciudad.toLowerCase() === 'madrid')
-    || null
+  const exacto = candidatos.find((c) => c.cp === cp)
+  if (exacto) return exacto
+
+  const provincia = candidatos.filter((c) => c.cp.startsWith('28') || lejania(c) <= 40)
+  if (!provincia.length) return null
+  return provincia.sort((a, b) => lejania(a) - lejania(b))[0]
 }
 
 async function buscarEnPhoton(direccion, cp) {
@@ -77,8 +98,12 @@ async function kmHasta(lat, lon) {
 /**
  * Devuelve siempre un objeto con `estado`:
  * - 'ok':          dirección encontrada, con km y tarifa.
- * - 'no':          los buscadores respondieron y esa dirección no existe.
+ * - 'no':          no se ha podido situar en el mapa. AVISA, pero NO bloquea.
  * - 'sin-revisar': no se pudo preguntar (sin red o servicio caído); se deja pedir.
+ *
+ * Ninguno de los tres impide pedir. Antes 'no' dejaba el botón muerto y había
+ * clientes que no podían comprar; perder un pedido es peor que llevar una
+ * dirección por confirmar, que se arregla con un mensaje de WhatsApp.
  */
 export async function calcularEnvio(direccion, cp) {
   let alguienRespondio = false
@@ -99,7 +124,7 @@ export async function calcularEnvio(direccion, cp) {
   if (!alguienRespondio) return { estado: 'sin-revisar', tarifa: TARIFA_BASE }
 
   const sitio = elegir(candidatos, cp)
-  if (!sitio) return { estado: 'no' }
+  if (!sitio) return { estado: 'no', tarifa: TARIFA_BASE }
 
   try {
     const km = await kmHasta(sitio.lat, sitio.lon)

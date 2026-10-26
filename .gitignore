@@ -27,3 +27,9 @@ dist-ssr
 .env*
 
 .firebase
+
+# Copias de datos y ficheros de trabajo.
+# Llevan nombres, teléfonos y direcciones de clientes: NUNCA a GitHub.
+*backup*.json
+catalogo-*.json
+precio-*.json

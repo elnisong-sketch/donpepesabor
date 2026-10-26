@@ -200,6 +200,21 @@
 .dps .pref:focus-within{border-color:var(--gold)}
 .dps .pref select{position:absolute;inset:0;width:100%;opacity:0;cursor:pointer}
 .dps .franja{display:flex;align-items:center;gap:8px}
+
+/* Franjas de entrega: se elige una, como quien elige la bandeja. */
+.dps .franjas{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:8px}
+.dps .franja-pick{border:1.5px solid var(--cream-2);background:var(--paper);border-radius:12px;padding:11px 12px;text-align:left;transition:border-color .14s,background .14s}
+.dps .franja-pick b{display:block;font-size:13.5px;font-weight:700;color:var(--ink)}
+.dps .franja-pick small{display:block;font-size:11.5px;color:var(--ink-faint);margin-top:2px}
+.dps .franja-pick:hover:not(:disabled){border-color:var(--vino)}
+.dps .franja-pick.on{border-color:var(--vino);background:#8a1f1f0f}
+.dps .franja-pick.on b{color:var(--vino)}
+.dps .franja-pick.libre{grid-column:1/-1}
+/* Completa: se ve, pero se nota que no se puede. */
+.dps .franja-pick.llena{background:var(--cream);border-style:dashed;cursor:not-allowed}
+.dps .franja-pick.llena b{color:var(--ink-faint);text-decoration:line-through}
+.dps .franja-pick.llena small{color:var(--warn);font-weight:700}
+.dps .note.aviso{background:#fdecea;border-color:#f3c6c1;color:#7a2018}
 .dps .franja span{font-weight:700;color:var(--ink-soft)}
 .dps .radios.two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .dps .radio{border:1.5px solid var(--cream-2);border-radius:10px;padding:12px;font-size:14px;text-align:center;transition:.15s}

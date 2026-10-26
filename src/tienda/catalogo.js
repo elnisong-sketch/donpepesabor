@@ -12,9 +12,21 @@ export const WHATSAPP = '34604136371'
 export const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbySjQNlkoTT_Wo28xxCKRgk41QvXaECsItCooxiqmwxdn5xNqUORVtHWCX7hhAC8gSY/exec'
 
 export const DIRECCION_LOCAL = 'Calle Berrocal 56, 28021 Madrid'
-export const COSTO_FRITO = 5          // € por bandeja frita
+/**
+ * Lo que cuesta freír una bandeja, según cuántas unidades lleve: las de 25 y 30
+ * pagan lo mismo, y la de 50 (hoy solo el tequeño tradicional) paga más porque
+ * lleva más trabajo y más aceite. Lo que no esté en la lista paga la pequeña.
+ */
+// La de 50 cuesta 6 € para que, con la bandeja a 24 €, frita salga redonda a 30 €.
+const COSTO_FRITO_POR_UNIDADES = { 25: 5, 30: 5, 50: 6 }
+export const COSTO_FRITO_BASE = 5
+
+export function costoFrito(presentacion) {
+  const uds = Number(String(presentacion).match(/\d+/)?.[0])
+  return COSTO_FRITO_POR_UNIDADES[uds] ?? COSTO_FRITO_BASE
+}
 export const PAGOS = ['Bizum', 'Efectivo', 'Transferencia', 'Tarjeta']
-// Cómo se puede pedir cada producto. Solo "Frito" lleva recargo (COSTO_FRITO).
+// Cómo se puede pedir cada producto. Solo "Frito" lleva recargo (costoFrito).
 // Los cachitos no tienen opción: se piden tal cual.
 const PREP = {
   Congelado: { icono: '❄️', detalle: 'Para freír en casa' },
@@ -50,25 +62,48 @@ export const PREFIJOS = [
 ]
 
 /**
- * Disponibilidad de una bandeja, tal como la ve el cliente.
- * Solo cuenta la etiqueta que pone el dueño en Inventario. El stock NO se mira:
- * hoy está a 0 en todos los productos y la tienda entera saldría agotada.
+ * Familias que SIEMPRE se hacen por encargo, con su antelación mínima en horas.
+ *
+ * Los tequeños se congelan y hay existencias; las empanadas, los pastelitos y los
+ * cachitos se hornean para cada pedido, así que piden dos días. Esto no depende de
+ * la etiqueta de Inventario: aunque nadie la ponga, estas familias piden sus 48 h.
+ * Si una bandeja concreta necesita más, la etiqueta manda.
  */
-export function estadoDe(variante) {
+const HORAS_POR_FAMILIA = [
+  [(p) => p?.categoria === 'Empanadas', 48],
+  [(p) => p?.categoria === 'Pastelitos', 48],
+  [(p) => /cachito/i.test(p?.nombre || ''), 48],
+]
+
+/** Antelación mínima del producto por ser de la familia que es. */
+export const horasDeFamilia = (p) =>
+  Math.max(0, ...HORAS_POR_FAMILIA.filter(([cumple]) => cumple(p)).map(([, h]) => h))
+
+const textoEncargo = (horas) =>
+  horas === 24 ? 'Por encargo · 24 h' : horas ? `Por encargo · ${horas} h` : ''
+
+/**
+ * Disponibilidad de una bandeja, tal como la ve el cliente.
+ *
+ * Manda la etiqueta que pone el dueño en Inventario, pero nunca por debajo de lo
+ * que pide la familia del producto. El stock NO se mira: hoy está a 0 en todos los
+ * productos y la tienda entera saldría agotada.
+ */
+export function estadoDe(variante, producto) {
   const etiqueta = variante?.etiqueta || ''
   if (etiqueta === 'agotado') return { agotada: true, horas: 0, texto: 'Agotada' }
-  if (etiqueta === '24h') return { agotada: false, horas: 24, texto: 'Por encargo · 24 h' }
-  if (etiqueta === '48h') return { agotada: false, horas: 48, texto: 'Por encargo · 48 h' }
-  return { agotada: false, horas: 0, texto: '' }
+  const porEtiqueta = etiqueta === '24h' ? 24 : etiqueta === '48h' ? 48 : 0
+  const horas = Math.max(porEtiqueta, horasDeFamilia(producto))
+  return { agotada: false, horas, texto: textoEncargo(horas) }
 }
 
 /** Resumen del producto entero para la tarjeta del catálogo. */
 export function estadoProducto(p) {
-  const estados = (p.variantes || []).map(estadoDe)
+  const estados = (p.variantes || []).map((v) => estadoDe(v, p))
   const aLaVenta = estados.filter((e) => !e.agotada)
   if (!aLaVenta.length) return { agotado: true, texto: 'Agotado' }
   const horas = Math.min(...aLaVenta.map((e) => e.horas))
-  return { agotado: false, texto: horas ? `Por encargo · ${horas} h` : '' }
+  return { agotado: false, texto: textoEncargo(horas) }
 }
 
 export const eur = (n) =>

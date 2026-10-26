@@ -1,17 +1,18 @@
 import { useState } from 'react'
-import { COSTO_FRITO, detallePrep, estadoDe, etiquetaPrep, eur, fotoDe, preparacionesDe, unidades } from './catalogo.js'
+import { costoFrito, detallePrep, estadoDe, etiquetaPrep, eur, fotoDe, preparacionesDe, unidades } from './catalogo.js'
 
 /** Ficha del producto: aquí se elige la bandeja, congelado o frito, y la cantidad. */
 export default function Ficha({ p, onAgregar, onCerrar }) {
   const variantes = p.variantes || []
-  const disponibles = variantes.filter((v) => !estadoDe(v).agotada)
+  const disponibles = variantes.filter((v) => !estadoDe(v, p).agotada)
   const [presentacion, setPresentacion] = useState(disponibles.length === 1 ? disponibles[0].presentacion : null)
   const opciones = preparacionesDe(p)
   const [preparacion, setPreparacion] = useState(opciones.length ? null : '')
   const [cantidad, setCantidad] = useState(1)
 
   const variante = variantes.find((v) => v.presentacion === presentacion)
-  const precioUnidad = (variante?.precio || 0) + (preparacion === 'Frito' ? COSTO_FRITO : 0)
+  const recargo = costoFrito(presentacion)
+  const precioUnidad = (variante?.precio || 0) + (preparacion === 'Frito' ? recargo : 0)
   const listo = variante && preparacion != null
 
   function añadir() {
@@ -24,7 +25,7 @@ export default function Ficha({ p, onAgregar, onCerrar }) {
       presentacion,
       preparacion,
       precio: variante.precio,
-      horasEncargo: estadoDe(variante).horas,
+      horasEncargo: estadoDe(variante, p).horas,
       cantidad,
     })
   }
@@ -55,16 +56,16 @@ export default function Ficha({ p, onAgregar, onCerrar }) {
               <div className="opt-row">
                 {variantes.map((v) => (
                   <button key={v.presentacion} className={`size-pick${v.presentacion === presentacion ? ' on' : ''}`}
-                    disabled={estadoDe(v).agotada} onClick={() => setPresentacion(v.presentacion)}>
-                    {unidades(v.presentacion)} <small>{estadoDe(v).agotada ? 'Agotada' : eur(v.precio)}</small>
+                    disabled={estadoDe(v, p).agotada} onClick={() => setPresentacion(v.presentacion)}>
+                    {unidades(v.presentacion)} <small>{estadoDe(v, p).agotada ? 'Agotada' : eur(v.precio)}</small>
                   </button>
                 ))}
               </div>
             </div>
 
-            {variante && estadoDe(variante).horas > 0 && (
+            {variante && estadoDe(variante, p).horas > 0 && (
               <p className="aviso-encargo">
-                ⏳ Esta bandeja es por encargo: la entrega más temprana es {estadoDe(variante).horas === 24 ? 'mañana' : 'dentro de dos días'}.
+                ⏳ Esta bandeja es por encargo: la entrega más temprana es {estadoDe(variante, p).horas === 24 ? 'mañana' : 'dentro de dos días'}.
               </p>
             )}
 
@@ -75,7 +76,7 @@ export default function Ficha({ p, onAgregar, onCerrar }) {
                   <button key={op} className={`prep-pick${op === preparacion ? ' on' : ''}${op === 'Frito' ? ' frito' : ''}`}
                     onClick={() => setPreparacion(op)}>
                     <b>{etiquetaPrep(op)}</b>
-                    <small>{detallePrep(op)}{op === 'Frito' ? ` · +${eur(COSTO_FRITO)}` : ''}</small>
+                    <small>{detallePrep(op)}{op === 'Frito' && presentacion ? ` · +${eur(recargo)}` : ''}</small>
                   </button>
                 ))}
               </div>

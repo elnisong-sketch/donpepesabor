@@ -1,10 +1,30 @@
 /**
- * Cierre del pedido: se registra en la hoja de Google y después se abre WhatsApp
- * con el pedido ya escrito. Si la hoja falla o tarda, se sigue a WhatsApp igual:
- * perder el registro es malo, perder el pedido es peor.
+ * Cierre del pedido: se deja registrado en la hoja de Google y en la bandeja de
+ * entrada de la gestión, y después se abre WhatsApp con el pedido ya escrito.
+ * Si algún registro falla o tarda, se sigue a WhatsApp igual: perder el registro
+ * es malo, perder el pedido es peor.
  */
 
-import { COSTO_FRITO, DIRECCION_LOCAL, SHEETS_URL, WHATSAPP, etiquetaPrep, eur } from './catalogo.js'
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore'
+import { db } from '../firebase.js'
+import { fechaLegible, whatsappDe } from '../pedidos.js'
+import { FRANJAS, SIN_PREFERENCIA, textoFranja } from '../franjas.js'
+import { DIRECCION_LOCAL, SHEETS_URL, WHATSAPP, costoFrito, etiquetaPrep, eur } from './catalogo.js'
+
+// Viven en ../pedidos.js porque la gestión también las necesita; se reexportan
+// para que el resto de la tienda las siga pidiendo aquí.
+export { fechaLegible, whatsappDe }
+
+/**
+ * La hora del pedido, tal como se guarda y se enseña.
+ *
+ * Sin franja elegida se guarda "Cualquier hora", que es información útil: son
+ * los pedidos que se pueden encajar donde sobre hueco.
+ */
+export function horarioDe(d) {
+  const f = FRANJAS.find((x) => x.id === d.franja)
+  return f ? textoFranja(f) : SIN_PREFERENCIA
+}
 
 export function nuevoCodigo() {
   return 'DP-' + String(Math.floor(1000 + Math.random() * 9000))
@@ -15,14 +35,6 @@ export function hoyLocal() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-// "2026-09-19" → "viernes 19/09"
-export function fechaLegible(iso) {
-  if (!iso) return '—'
-  const [a, m, d] = iso.split('-').map(Number)
-  const dia = new Date(a, m - 1, d).toLocaleDateString('es-ES', { weekday: 'long' })
-  return `${dia} ${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}`
-}
-
 /** Primer día en que se puede entregar el carrito, según los productos por encargo. */
 export function fechaMinima(items) {
   const horas = Math.max(0, ...items.map((l) => l.horasEncargo || 0))
@@ -31,26 +43,26 @@ export function fechaMinima(items) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-export function totalesDe(items, envio) {
-  const productos = items.reduce((s, l) => s + l.precio * l.cantidad, 0)
-  const bandejasFritas = items.filter((l) => l.preparacion === 'Frito').reduce((s, l) => s + l.cantidad, 0)
-  const fritura = bandejasFritas * COSTO_FRITO
-  const costoEnvio = items.length ? envio : 0
-  return { productos, bandejasFritas, fritura, envio: costoEnvio, total: productos + fritura + costoEnvio }
+/**
+ * Los productos del carrito que obligan a esperar, para poder nombrarlos en el
+ * aviso. Decir "las empanadas se hacen por encargo" se entiende; decir "hay
+ * productos por encargo" obliga al cliente a adivinar cuál.
+ */
+export function porEncargoDe(items) {
+  const nombres = [...new Set(items.filter((l) => (l.horasEncargo || 0) > 0).map((l) => l.nombre))]
+  if (!nombres.length) return ''
+  if (nombres.length === 1) return nombres[0]
+  return nombres.slice(0, -1).join(', ') + ' y ' + nombres[nombres.length - 1]
 }
 
-/**
- * Número del cliente en formato internacional, sin "+" ni espacios, o null si no se reconoce.
- * "+44 7700 900123" / "0044..." → "447700900123"; un móvil español de 9 cifras → "34...".
- */
-export function whatsappDe(telefono) {
-  const t = String(telefono || '').trim()
-  const d = t.replace(/\D/g, '')
-  if (t.startsWith('+')) return d.length >= 8 ? d : null
-  if (d.startsWith('00')) return d.length >= 10 ? d.slice(2) : null
-  if (/^[6789]\d{8}$/.test(d)) return '34' + d
-  if (/^34[6789]\d{8}$/.test(d)) return d
-  return null
+export function totalesDe(items, envio) {
+  const productos = items.reduce((s, l) => s + l.precio * l.cantidad, 0)
+  const fritas = items.filter((l) => l.preparacion === 'Frito')
+  const bandejasFritas = fritas.reduce((s, l) => s + l.cantidad, 0)
+  // Cada bandeja paga según su tamaño, así que no vale multiplicar por un precio único.
+  const fritura = fritas.reduce((s, l) => s + costoFrito(l.presentacion) * l.cantidad, 0)
+  const costoEnvio = items.length ? envio : 0
+  return { productos, bandejasFritas, fritura, envio: costoEnvio, total: productos + fritura + costoEnvio }
 }
 
 const lineaProducto = (l) =>
@@ -68,30 +80,37 @@ export function redactarMensaje(d, items, envio, distancia) {
   if (d.tipoEntrega === 'Domicilio') {
     const km = distancia?.km ? ` (${distancia.km} km)` : ''
     L.push(`*Entrega:* 🚚 A domicilio — ${d.direccion || '—'}, ${d.cp || '—'}${km}`)
+    if (distancia?.estado !== 'ok') L.push('⚠️ *Dirección sin comprobar en el mapa: confirmadla antes de salir*')
   } else {
     L.push(`*Entrega:* 🏪 Recogida en ${DIRECCION_LOCAL}`)
   }
-  L.push(`*Día:* ${fechaLegible(d.fechaEntrega)} · de ${d.horaDesde || '—'} a ${d.horaHasta || '—'}`)
+  L.push(`*Día:* ${fechaLegible(d.fechaEntrega)} · ${horarioDe(d)}`)
   L.push(`*Pago:* ${d.formaPago || '—'}`, '')
   L.push('*Productos:*')
   for (const l of items) L.push(lineaProducto(l))
   L.push('')
   L.push(`Productos: ${eur(t.productos)}`)
-  if (t.fritura) L.push(`Fritura (${t.bandejasFritas} × ${eur(COSTO_FRITO)}): ${eur(t.fritura)}`)
+  if (t.fritura) L.push(`Fritura (${t.bandejasFritas} ${t.bandejasFritas === 1 ? 'bandeja' : 'bandejas'}): ${eur(t.fritura)}`)
   if (d.tipoEntrega === 'Domicilio') L.push(`Envío: ${eur(t.envio)}`)
   L.push(`*TOTAL: ${eur(t.total)}*`)
   if (d.nota?.trim()) L.push('', `*Nota:* ${d.nota.trim()}`)
   return L.join('\n')
 }
 
-/** Registra el pedido en la hoja de Google, con los mismos campos que ya usaba. */
+/**
+ * Registra el pedido en la hoja de Google.
+ *
+ * PARADO desde el 26/10/2026 por decisión del dueño: los pedidos van solo a la
+ * gestión (`registrarEnNube`). Se deja escrito para poder volver a encenderlo:
+ * basta con llamarla otra vez desde `Carrito.jsx`, junto a `registrarEnNube`.
+ */
 export function registrarEnHoja(d, items, envio) {
   const t = totalesDe(items, envio)
   const domicilio = d.tipoEntrega === 'Domicilio'
   const params = new URLSearchParams({
     id: d.codigo,
     fecha: d.fechaEntrega,
-    horario: `${d.horaDesde} a ${d.horaHasta}`,
+    horario: horarioDe(d),
     cliente: d.nombre.trim(),
     telefono: d.telefono.trim(),
     cp: domicilio ? d.cp.trim() : '',
@@ -106,6 +125,57 @@ export function registrarEnHoja(d, items, envio) {
   })
   // keepalive: la petición termina aunque la página se vaya a WhatsApp.
   return fetch(`${SHEETS_URL}?${params}`, { mode: 'no-cors', keepalive: true })
+}
+
+/**
+ * El pedido con los nombres de campo que usa la gestión, para que se pueda volcar
+ * en 📦 Pedidos sin tocar nada. Dos cosas que no se pueden cambiar a la ligera:
+ *
+ * - `items[].subtotal` NO lleva el recargo de fritura: la gestión lo suma aparte
+ *   desde `servicio`. Meterlo en los dos sitios cobraría dos veces.
+ * - `items[].preparacion` es lo que mira `preparacionDe`; `nombreProducto` (y no
+ *   `nombre`) es como la gestión llama al producto.
+ */
+export function paraGestion(d, items, envio, distancia) {
+  const t = totalesDe(items, envio)
+  const domicilio = d.tipoEntrega === 'Domicilio'
+  return {
+    codigo: d.codigo,
+    nombre: d.nombre.trim(),
+    telefono: d.telefono.trim(),
+    direccion: domicilio ? d.direccion.trim() : '',
+    cp: domicilio ? d.cp.trim() : '',
+    tipoEntrega: d.tipoEntrega,
+    formaPago: d.formaPago,
+    fecha: d.fechaEntrega,
+    rangoHorario: horarioDe(d),
+    nota: d.nota?.trim() || '',
+    km: distancia?.km ?? null,
+    direccionComprobada: distancia?.estado === 'ok',
+    envio: t.envio,
+    servicio: t.fritura,
+    items: items.map((l) => ({
+      productoId: l.productoId,
+      nombreProducto: l.nombre,
+      presentacion: l.presentacion,
+      preparacion: l.preparacion || 'Congelado',
+      cantidad: l.cantidad,
+      precio: l.precio,
+      subtotal: l.precio * l.cantidad,
+    })),
+  }
+}
+
+/**
+ * Deja el pedido en la bandeja de entrada de la gestión (colección `pedidosWeb`).
+ * Ahí no es todavía un pedido: el dueño lo acepta o lo descarta desde 📦 Pedidos.
+ * La tienda es pública y cualquiera puede escribir aquí, por eso no entra directo.
+ */
+export function registrarEnNube(d, items, envio, distancia) {
+  return addDoc(collection(db, 'pedidosWeb'), {
+    ...paraGestion(d, items, envio, distancia),
+    creado: serverTimestamp(),
+  })
 }
 
 /** Espera como mucho `ms`; pasado el plazo se sigue igual. */

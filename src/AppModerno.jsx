@@ -1,8 +1,12 @@
-import { useState, useEffect } from "react";
-import { db } from "./firebase";
-import { doc, onSnapshot, setDoc } from "firebase/firestore";
-import { bandejasFritas, preparacionDe, quienEntrega, totalesPedido } from "./pedidos.js";
+import { useState, useEffect, useMemo } from "react";
+import { auth, db } from "./firebase";
+import { collection, deleteDoc, doc, onSnapshot, setDoc } from "firebase/firestore";
+import { bandejasFritas, enlaceConfirmacion, fechaLegible, preparacionDe, quienEntrega, totalesPedido } from "./pedidos.js";
 import { cuentasJornada, disponibles } from "./mostrador.js";
+import { FRANJAS, TOPE_POR_FRANJA, ocupacion, sinReparto, textoFranja } from "./franjas.js";
+// Las fotos y el recargo por freír son los mismos que ve el cliente en la tienda:
+// si se tocan allí, el pedido hecho a mano sigue cuadrando con la web.
+import { costoFrito, fotoDe } from "./tienda/catalogo.js";
 
 // ─── DATOS INICIALES (idénticos a App.jsx) ──────────────────────────────────
 const PRODUCTOS_INICIALES = [];
@@ -10,14 +14,14 @@ const PRODUCTOS_INICIALES = [];
 const CLIENTES_INICIALES = [];
 
 const FORMAS_PAGO = ["Efectivo", "Bizum", "Transferencia", "Tarjeta"];
-const HORAS_RANGO = Array.from({ length: 15 }, (_, i) => `${String(i + 9).padStart(2, "0")}:00`);
 const ESTADOS_PEDIDO = ["Pendiente", "Confirmado", "En ruta", "Entregado", "Cancelado"];
+// Tonos algo más oscuros que los de antes: sobre el fondo crema, los claros no se leían.
 const ESTADO_COLORS = {
-  Pendiente: "#f59e0b",
-  Confirmado: "#3b82f6",
-  "En ruta": "#8b5cf6",
-  Entregado: "#10b981",
-  Cancelado: "#ef4444",
+  Pendiente: "#bf7d08",
+  Confirmado: "#3f5bb0",
+  "En ruta": "#6b3fa0",
+  Entregado: "#1d7a3c",
+  Cancelado: "#b03a2e",
 };
 const UNIDADES_MATERIA_PRIMA = ["kg", "litros", "unidades"];
 const STOCK_MINIMO_DEFECTO = 5;
@@ -29,31 +33,48 @@ const hoy = () => new Date().toISOString().split("T")[0];
 const generarId = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
 const inicioDeMes = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split("T")[0]; };
 
-// ─── PALETA GLOBAL (modo claro, estilo profesional) ─────────────────────────
-const BG_APP    = "#f0f4f8";   // gris azulado muy suave
-const BG_CARD   = "#ffffff";   // blanco
-const BG_INPUT  = "#f8fafc";   // blanco suave
-const BORDER    = "#e2e8f0";   // gris claro
-const BORDER2   = "#cbd5e1";   // gris medio
-const NAVY      = "#1e3a5f";   // azul marino header
-const ORANGE    = "#f97316";   // naranja acento
-const TEXT_MAIN = "#1e293b";   // texto principal
-const TEXT_SUB  = "#64748b";   // texto secundario
+/**
+ * PALETA — la misma que ve el cliente en la tienda (src/tienda/tienda.css).
+ *
+ * La gestión y la tienda son el mismo negocio: si allí es crema y vino, aquí
+ * también. Todo el color de la app sale de estas constantes, así que cambiarlas
+ * cambia las doce pantallas a la vez; no hay colores sueltos escritos a mano.
+ */
+const BG_APP    = "#fbf4e8";   // crema, el fondo de la tienda
+const BG_CARD   = "#ffffff";   // papel
+const BG_INPUT  = "#fbf4e8";   // crema, para que los campos no parezcan agujeros
+const BORDER    = "#efe1c8";   // crema oscuro
+const BORDER2   = "#e0cdab";   // un paso más
+const MARRON    = "#2a1200";   // marrón de la cabecera
+const VINO      = "#8a1f1f";   // el acento de la marca
+const ORO       = "#e8a317";   // dorado, solo para detalles
+const TEXT_MAIN = "#2b1a10";   // texto principal
+const TEXT_SUB  = "#6f5a4a";   // texto secundario
+const TEXT_TENUE = "#a8968a";  // etiquetas y apoyos
+const TIPO      = "'Manrope', system-ui, sans-serif";
+const TIPO_TIT  = "'Archivo', system-ui, sans-serif";
 
 // ─── ACENTOS DE COLOR POR SECCIÓN ───────────────────────────────────────────
+/**
+ * Un color por sección, para saber dónde estás de un vistazo.
+ *
+ * Son los mismos doce de antes pero bajados de tono: sobre crema, los colores
+ * de neón no se leen y pelean con el vino de la marca. Pedidos se queda con el
+ * vino porque es la pantalla principal.
+ */
 const ACENTOS = {
-  pedidos:    "#f97316",   // naranja
-  clientes:   "#3b82f6",   // azul
-  inventario: "#8b5cf6",   // violeta
-  stock:      "#06b6d4",   // cyan
-  produccion: "#10b981",   // verde
-  proveedores:"#14b8a6",   // teal
-  compras:    "#ec4899",   // rosa
-  gastos:     "#ef4444",   // rojo
-  reporte:    "#6366f1",   // indigo
-  personal:   "#f59e0b",   // ámbar
-  mostrador:  "#d946ef",   // fucsia
-  admin:      "#64748b",   // gris
+  pedidos:    "#8a1f1f",   // vino de la marca
+  clientes:   "#1d6a7a",   // azul petróleo
+  inventario: "#6b3fa0",   // ciruela
+  stock:      "#0f6e63",   // verde azulado
+  produccion: "#2f7a3f",   // verde
+  proveedores:"#156c6c",   // teal
+  compras:    "#a3387a",   // frambuesa
+  gastos:     "#b03a2e",   // rojo tierra
+  reporte:    "#3f5bb0",   // azul
+  personal:   "#bf7d08",   // dorado
+  mostrador:  "#8d3b8f",   // morado
+  admin:      "#6f5a4a",   // tierra
 };
 
 // ─── HELPERS STOCK FIFO ──────────────────────────────────────────────────────
@@ -73,6 +94,97 @@ function stockTotal(lotes = []) {
 }
 
 // ─── COMPONENTES UI BASE ─────────────────────────────────────────────────────
+/**
+ * Iconos dibujados a línea, en vez de emojis.
+ *
+ * Los emojis los pinta cada móvil a su manera (en un iPhone y en un Android no
+ * se parecen) y no se pueden teñir del color de la sección. Esto sí.
+ */
+const TRAZOS = {
+  inicio:     "M4 11l8-7 8 7M6 10v9h12v-9M10 19v-5h4v5",
+  pedidos:    "M3 7l9-4 9 4v10l-9 4-9-4z M3 7l9 4 9-4 M12 11v10",
+  clientes:   "M16 19v-1.6a3.4 3.4 0 00-3.4-3.4H6.4A3.4 3.4 0 003 17.4V19 M21 19v-1.6a3.4 3.4 0 00-2.6-3.3 M16.5 4.5a3.2 3.2 0 010 6.2",
+  inventario: "M20.6 13.3L13.3 20.6a2 2 0 01-2.8 0l-7-7V4h9.6l7.5 7.5a1.3 1.3 0 010 1.8z",
+  mostrador:  "M3 10l2-5h14l2 5 M4 10v9h16v-9 M9 19v-5h6v5",
+  stock:      "M3 6a2 2 0 012-2h14a2 2 0 012 2v12a2 2 0 01-2 2H5a2 2 0 01-2-2z M3 9h18 M8 4v5",
+  produccion: "M4 20V9l5 3V9l5 3V9l6 3.5V20z M4 9l1-5h3l1 5",
+  personal:   "M5 20v-1a5 5 0 015-5h4a5 5 0 015 5v1",
+  admin:      "M19.4 14.6a1.6 1.6 0 00.3 1.8 2 2 0 11-2.8 2.8 1.6 1.6 0 00-2.7 1.1 2 2 0 11-4 0 1.6 1.6 0 00-2.8-1.1 2 2 0 11-2.8-2.8 1.6 1.6 0 00-1.1-2.7 2 2 0 110-4 1.6 1.6 0 001.1-2.8 2 2 0 112.8-2.8 1.6 1.6 0 002.7-1.1 2 2 0 114 0 1.6 1.6 0 002.8 1.1 2 2 0 112.8 2.8 1.6 1.6 0 001.1 2.7 2 2 0 110 4 1.6 1.6 0 00-1.4.9z",
+};
+// Los que además llevan un círculo suelto (una cabeza, un tornillo).
+const CIRCULOS = { clientes: [9.5, 7.5, 3.2], personal: [12, 8, 3.4], admin: [12, 12, 3.1], inventario: [7.6, 7.6, 1.4] };
+
+/**
+ * ¿Hay sitio para tener el menú siempre abierto?
+ *
+ * En el ordenador y en la tablet apaisada sí: el menú se queda fijo a la
+ * izquierda. En el móvil no, 268 px de menú sobre 375 no dejan ver la app, así
+ * que ahí sigue siendo un cajón que se abre y se cierra.
+ */
+const ANCHO_MENU = 268;
+const ALTO_CABECERA = 66;
+
+function usePantallaAncha(minimo = 900) {
+  const consulta = `(min-width: ${minimo}px)`;
+  const [ancha, setAncha] = useState(() => typeof window !== "undefined" && window.matchMedia(consulta).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(consulta);
+    const alCambiar = e => setAncha(e.matches);
+    mq.addEventListener("change", alCambiar);
+    setAncha(mq.matches);
+    return () => mq.removeEventListener("change", alCambiar);
+  }, [consulta]);
+  return ancha;
+}
+
+const Icono = ({ nombre, color = "currentColor", tam = 18 }) => {
+  const d = TRAZOS[nombre];
+  if (!d) return null;
+  const c = CIRCULOS[nombre];
+  return (
+    <svg width={tam} height={tam} viewBox="0 0 24 24" fill="none" stroke={color}
+      strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flex: "none" }}>
+      <path d={d} />
+      {c && <circle cx={c[0]} cy={c[1]} r={c[2]} />}
+    </svg>
+  );
+};
+
+/**
+ * Quién lleva el pedido, en la propia fila de la lista.
+ *
+ * Antes había que abrir el pedido para saberlo, y un pedido a domicilio sin
+ * repartidor no se distinguía de uno ya asignado: se descubría el día de la
+ * entrega. Ahora el que falta sale en ámbar y con el borde marcado.
+ */
+const ChipRepartidor = ({ pedido, repartidores }) => {
+  if (pedido?.estado === "Cancelado") return null;
+  const recogida = pedido?.tipoEntrega === "Recogida";
+  const nombre = repartidores?.find(r => r.id === pedido?.repartidorId)?.nombre;
+  const falta = !recogida && !nombre;
+
+  const color = falta ? "#bf7d08" : TEXT_SUB;
+  const texto = recogida ? "Recoge el cliente" : (nombre || "Sin repartidor");
+
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 5, marginTop: 5,
+      background: falta ? "#bf7d0818" : BG_APP,
+      border: `1px solid ${falta ? "#bf7d0855" : BORDER}`,
+      borderRadius: 999, padding: "2px 9px 2px 7px",
+      fontSize: 11.5, fontWeight: falta ? 800 : 600, color,
+    }}>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"
+        strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flex: "none" }}>
+        {recogida
+          ? <><path d="M3 10l2-5h14l2 5" /><path d="M4 10v9h16v-9" /></>
+          : <><circle cx="5.5" cy="17" r="3" /><circle cx="18.5" cy="17" r="3" /><path d="M8.5 17h7l-3-7H9M14 7h3l2 5" /></>}
+      </svg>
+      {texto}
+    </span>
+  );
+};
+
 const Badge = ({ estado }) => (
   <span style={{
     background: ESTADO_COLORS[estado] + "18", color: ESTADO_COLORS[estado],
@@ -87,7 +199,7 @@ const Btn = ({ children, onClick, variant = "primary", small, accent, style = {}
     padding: small ? "7px 14px" : "11px 20px", fontSize: small ? 13 : 15,
     transition: "transform .12s, box-shadow .12s", ...style
   };
-  const ac = accent || ORANGE;
+  const ac = accent || VINO;
   const variants = {
     primary: { background: ac, color: "#fff", boxShadow: `0 4px 12px ${ac}55` },
     secondary: { background: BG_CARD, color: TEXT_MAIN, border: `1px solid ${BORDER}`, boxShadow: "0 1px 3px #0001" },
@@ -103,7 +215,7 @@ const Btn = ({ children, onClick, variant = "primary", small, accent, style = {}
   );
 };
 
-const Chips = ({ label, options, value, onChange, accent = ORANGE }) => (
+const Chips = ({ label, options, value, onChange, accent = VINO }) => (
   <div style={{ marginBottom: 14 }}>
     {label && <label style={{ display: "block", color: TEXT_SUB, fontSize: 12, marginBottom: 6, fontWeight: 600, textTransform: "uppercase", letterSpacing: .5 }}>{label}</label>}
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -159,11 +271,11 @@ const Card = ({ children, accent, style = {} }) => (
   }}>{children}</div>
 );
 
-const Modal = ({ title, accent = ORANGE, onClose, children }) => (
+const Modal = ({ title, accent = VINO, onClose, children }) => (
   <div className="modal-overlay">
     <div className="modal-box" style={{ background: BG_CARD, border: `1px solid ${BORDER}`, boxShadow: "0 20px 60px #0003" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <h2 style={{ color: NAVY, margin: 0, fontSize: 19, fontWeight: 800 }}>{title}</h2>
+        <h2 style={{ color: MARRON, margin: 0, fontSize: 19, fontFamily: TIPO_TIT, fontWeight: 800 }}>{title}</h2>
         <button onClick={onClose} style={{ background: BG_APP, border: `1px solid ${BORDER}`, color: TEXT_SUB, fontSize: 16, cursor: "pointer", borderRadius: 8, width: 32, height: 32 }}>✕</button>
       </div>
       {children}
@@ -191,16 +303,158 @@ function etiquetaDia(iso) {
   const nombre = fecha.toLocaleDateString("es-ES", { weekday: "long" });
   return `${prefijo}${nombre} ${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}/${a}`;
 }
-function FormularioPedido({ productos, clientes, repartidores, onGuardar, onCerrar, pedidoEditar }) {
+/** Precio de inventario de esa bandeja, sin comisiones ni recargos. */
+const precioTarifa = (it, productosRef) => {
+  const prod = productosRef.find(p => String(p.id) === String(it.productoId));
+  return prod?.variantes.find(v => v.presentacion === it.presentacion)?.precio || 0;
+};
+
+/**
+ * Lo que se cobra por bandeja. Si se ha escrito un precio a mano manda ese: hay
+ * clientes con precio pactado. La comisión y el recargo de frito se suman aparte.
+ */
+const precioFinalItem = (it, productosRef) => {
+  const manual = it.precioManual === "" || it.precioManual === undefined ? null : parseFloat(it.precioManual);
+  const base = manual !== null && !isNaN(manual) ? manual : precioTarifa(it, productosRef);
+  const comision = parseFloat(it.comision) || 0;
+  const recargoFrito = it.estado === "Frito" ? (parseFloat(it.recargoFrito) || 0) : 0;
+  return base + comision + recargoFrito;
+};
+
+/**
+ * Elegir productos como en la tienda: se ve el catálogo con sus fotos, se pulsa uno
+ * y se elige bandeja, preparación y cantidad.
+ *
+ * La diferencia con la tienda es que aquí TODO el dinero se puede cambiar antes de
+ * añadir la línea: el precio de la bandeja, el recargo por freír y la comisión. Es
+ * lo que permite los precios pactados con un cliente sin tocar el inventario.
+ */
+function SelectorProductos({ productos, ac, onAgregar }) {
+  const [abierto, setAbierto] = useState(null);     // producto desplegado
+  const [item, setItem] = useState(null);           // lo que se está configurando
+
+  const abrir = (p) => {
+    if (abierto === p.id) { setAbierto(null); setItem(null); return; }
+    const pres = p.variantes?.[0]?.presentacion || "Bandeja 25";
+    setAbierto(p.id);
+    setItem({ productoId: p.id, presentacion: pres, estado: "Congelado", cantidad: 1,
+              comision: 0, recargoFrito: costoFrito(pres), precioManual: "" });
+  };
+
+  /**
+   * Al cambiar de bandeja se trae el recargo de freír que le toca (5 € la de 25,
+   * 8 € la de 50), el mismo que paga el cliente en la web. Sigue siendo editable:
+   * lo que se escriba a mano manda hasta que se cambie de bandeja otra vez.
+   */
+  const cambiar = (campo, valor) => setItem(i => (
+    campo === "presentacion"
+      ? { ...i, presentacion: valor, recargoFrito: costoFrito(valor) }
+      : { ...i, [campo]: valor }
+  ));
+
+  const añadir = () => {
+    const prod = productos.find(p => String(p.id) === String(item.productoId));
+    const precio = precioFinalItem(item, productos);
+    onAgregar({ ...item, id: generarId(), nombreProducto: prod.nombre, precio,
+                precioTarifa: precioTarifa(item, productos), subtotal: precio * item.cantidad });
+    setAbierto(null); setItem(null);
+  };
+
+  const prodAbierto = productos.find(p => String(p.id) === String(abierto));
+  const tarifa = item ? precioTarifa(item, productos) : 0;
+  const unitario = item ? precioFinalItem(item, productos) : 0;
+
+  return (
+    <div style={{ background: "#101015", borderRadius: 14, padding: 14, marginBottom: 14, border: `1px solid ${ac}22` }}>
+      <p style={{ color: ac, fontSize: 13, fontWeight: 800, margin: "0 0 10px" }}>🧺 Elegir productos</p>
+
+      {!productos.length && <Empty texto="No hay productos en el inventario" />}
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(104px, 1fr))", gap: 8 }}>
+        {productos.map(p => {
+          const activo = String(p.id) === String(abierto);
+          return (
+            <button key={p.id} onClick={() => abrir(p)} style={{
+              background: activo ? ac + "22" : BG_CARD, border: `2px solid ${activo ? ac : BORDER}`,
+              borderRadius: 12, padding: 0, cursor: "pointer", overflow: "hidden", textAlign: "left",
+            }}>
+              <img src={fotoDe(p)} alt="" style={{ width: "100%", height: 62, objectFit: "cover", display: "block" }} />
+              <span style={{ display: "block", color: activo ? ac : TEXT_MAIN, fontSize: 11.5, fontWeight: 700, padding: "6px 7px 2px", lineHeight: 1.25 }}>
+                {p.nombre}
+              </span>
+              <span style={{ display: "block", color: TEXT_SUB, fontSize: 11, padding: "0 7px 7px" }}>
+                desde {Math.min(...(p.variantes || []).map(v => v.precio || 0)).toFixed(2)}€
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {prodAbierto && item && (
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${BORDER}` }}>
+          <p style={{ color: TEXT_MAIN, fontWeight: 800, margin: "0 0 10px", fontSize: 14 }}>{prodAbierto.nombre}</p>
+
+          <Chips label="Bandeja" accent={ac}
+            options={(prodAbierto.variantes || []).map(v => ({ value: v.presentacion, label: `${unidadesPorPresentacion(v.presentacion)} uds · ${(v.precio || 0).toFixed(2)}€` }))}
+            value={item.presentacion} onChange={v => cambiar("presentacion", v)} />
+
+          <Chips label="¿Cómo lo quiere?" accent={ac} options={["Congelado", "Frito"]}
+            value={item.estado} onChange={v => cambiar("estado", v)} />
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <Input label="Bandejas" type="number" min="1" value={item.cantidad}
+              onChange={e => cambiar("cantidad", parseInt(e.target.value) || 1)} />
+            <Input label="Precio por bandeja (€)" type="number" min="0" step="0.01" value={item.precioManual ?? ""}
+              placeholder={tarifa.toFixed(2)} onChange={e => cambiar("precioManual", e.target.value)} />
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: item.estado === "Frito" ? "1fr 1fr" : "1fr", gap: 8 }}>
+            {item.estado === "Frito" && (
+              <Input label="Recargo por frito (€)" type="number" step="0.01" value={item.recargoFrito}
+                onChange={e => cambiar("recargoFrito", e.target.value)} />
+            )}
+            <Input label="Comisión por bandeja (€)" type="number" step="0.01" value={item.comision}
+              onChange={e => cambiar("comision", e.target.value)} placeholder="0" />
+          </div>
+
+          <p style={{ color: TEXT_SUB, fontSize: 12, margin: "0 0 10px" }}>
+            {unitario > 0
+              ? <>Por bandeja: <strong style={{ color: TEXT_MAIN }}>{unitario.toFixed(2)}€</strong> · Total línea: <strong style={{ color: ac }}>{(unitario * item.cantidad).toFixed(2)}€</strong></>
+              : "Esta bandeja no tiene precio en Inventario: escríbelo arriba"}
+            {item.precioManual !== "" && !isNaN(parseFloat(item.precioManual)) && Math.abs(parseFloat(item.precioManual) - tarifa) > 0.009 && (
+              <span style={{ color: ACENTOS.gastos, fontWeight: 700 }}> · precio especial (tarifa {tarifa.toFixed(2)}€)</span>
+            )}
+          </p>
+
+          <Btn small accent={ac} onClick={añadir}>Añadir al pedido</Btn>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FormularioPedido({ productos, clientes, repartidores, pedidos, onGuardar, onCerrar, pedidoEditar }) {
   const ac = ACENTOS.pedidos;
   const [form, setForm] = useState(pedidoEditar || {
     clienteId: "", nombre: "", telefono: "", direccion: "", cp: "",
     tipoEntrega: "Domicilio", formaPago: "Efectivo", repartidorId: "",
     rangoHorario: "", fecha: hoy(), estado: "Pendiente", items: [], envio: 0
   });
-  const [item, setItem] = useState({ productoId: "", presentacion: "Bandeja 25", estado: "Congelado", cantidad: 1, comision: 0, recargoFrito: 0 });
-
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  // Huecos ya ocupados. El pedido que se está editando no se cuenta a sí mismo.
+  const agendaForm = useMemo(
+    () => ocupacion((pedidos || []).filter(p => p.id !== form.id)),
+    [pedidos, form.id]
+  );
+
+  const estiloFranja = (activa) => ({
+    background: activa ? ac : BG_CARD,
+    border: `1.5px solid ${activa ? ac : BORDER}`,
+    borderRadius: 10, padding: "9px 10px", cursor: "pointer",
+    color: activa ? "#fff" : TEXT_MAIN, fontSize: 12.5, fontWeight: 700,
+    fontFamily: "inherit", textAlign: "center",
+  });
 
   const cambiarTipoEntrega = (tipo) => {
     const nuevoRep = tipo === "Recogida"
@@ -213,34 +467,7 @@ function FormularioPedido({ productos, clientes, repartidores, onGuardar, onCerr
     ? repartidores.filter(r => r.id === REPARTIDOR_TIENDA_ID)
     : repartidores.filter(r => r.id !== REPARTIDOR_TIENDA_ID);
 
-  /** Precio de inventario de esa bandeja, sin comisiones ni recargos. */
-  const precioTarifa = (it, productosRef) => {
-    const prod = productosRef.find(p => String(p.id) === String(it.productoId));
-    return prod?.variantes.find(v => v.presentacion === it.presentacion)?.precio || 0;
-  };
-
-  /**
-   * Lo que se cobra por bandeja. Si se ha escrito un precio a mano manda ese: hay
-   * clientes con precio pactado. La comisión y el recargo de frito se suman aparte.
-   */
-  const precioFinalItem = (it, productosRef) => {
-    const manual = it.precioManual === "" || it.precioManual === undefined ? null : parseFloat(it.precioManual);
-    const base = manual !== null && !isNaN(manual) ? manual : precioTarifa(it, productosRef);
-    const comision = parseFloat(it.comision) || 0;
-    const recargoFrito = it.estado === "Frito" ? (parseFloat(it.recargoFrito) || 0) : 0;
-    return base + comision + recargoFrito;
-  };
-
-  const agregarItem = () => {
-    if (!item.productoId) return;
-    const prod = productos.find(p => String(p.id) === String(item.productoId));
-    const precioFinal = precioFinalItem(item, productos);
-    setForm(f => ({
-      ...f, items: [...f.items, { ...item, id: generarId(), nombreProducto: prod.nombre, precio: precioFinal,
-        precioTarifa: precioTarifa(item, productos), subtotal: precioFinal * item.cantidad }]
-    }));
-    setItem({ productoId: "", presentacion: "Bandeja 25", estado: "Congelado", cantidad: 1, comision: 0, recargoFrito: 0, precioManual: "" });
-  };
+  const agregarItem = (linea) => setForm(f => ({ ...f, items: [...f.items, linea] }));
 
   const subtotalProductos = form.items.reduce((s, i) => s + (i.subtotal || 0), 0);
   const total = subtotalProductos + (parseFloat(form.envio) || 0);
@@ -284,26 +511,43 @@ function FormularioPedido({ productos, clientes, repartidores, onGuardar, onCerr
       <Input label="Código Postal *" value={form.cp} onChange={e => set("cp", e.target.value)} placeholder="28XXX" />
       <Chips label="Tipo de entrega" accent={ac} options={["Domicilio", "Recogida"]} value={form.tipoEntrega} onChange={v => cambiarTipoEntrega(v)} />
       <Chips label="Forma de pago" accent={ac} options={FORMAS_PAGO} value={form.formaPago} onChange={v => set("formaPago", v)} />
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-        <Input label="Fecha de entrega" type="date" value={form.fecha} onChange={e => set("fecha", e.target.value)} />
-        <div style={{ marginBottom: 12 }}>
-          <label style={{ display: "block", color: "#888", fontSize: 12, marginBottom: 4 }}>Rango horario</label>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <select style={{ flex: 1, background: BG_INPUT, border: "1px solid #2d2e38", borderRadius: 10, color: TEXT_SUB, padding: "9px 8px", fontSize: 13, outline: "none" }}
-              value={form.rangoHorario?.split(" a ")[0] || ""}
-              onChange={e => { const fin = form.rangoHorario?.split(" a ")[1] || ""; set("rangoHorario", e.target.value + " a " + fin); }}>
-              <option value="">--</option>
-              {HORAS_RANGO.map(h => <option key={h} value={h}>{h}</option>)}
-            </select>
-            <span style={{ color: "#888", fontSize: 13, whiteSpace: "nowrap" }}>a</span>
-            <select style={{ flex: 1, background: BG_INPUT, border: "1px solid #2d2e38", borderRadius: 10, color: TEXT_SUB, padding: "9px 8px", fontSize: 13, outline: "none" }}
-              value={form.rangoHorario?.split(" a ")[1] || ""}
-              onChange={e => { const ini = form.rangoHorario?.split(" a ")[0] || ""; set("rangoHorario", ini + " a " + e.target.value); }}>
-              <option value="">--</option>
-              {HORAS_RANGO.map(h => <option key={h} value={h}>{h}</option>)}
-            </select>
-          </div>
+      <Input label="Fecha de entrega" type="date" value={form.fecha} onChange={e => set("fecha", e.target.value)} />
+      {form.tipoEntrega === "Domicilio" && sinReparto(form.fecha) && (
+        <p style={{ color: "#bf7d08", fontSize: 12.5, fontWeight: 700, margin: "-6px 0 12px" }}>
+          Ese día es domingo: la tienda no ofrece reparto, pero aquí puedes apuntarlo igual.
+        </p>
+      )}
+
+      {/* Las mismas franjas que ve el cliente, con los huecos que quedan.
+          Aquí NO se bloquean: si el dueño quiere doblar una franja, manda él. */}
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ display: "block", color: TEXT_SUB, fontSize: 12, marginBottom: 6, fontWeight: 600 }}>Franja de entrega</label>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(118px, 1fr))", gap: 6 }}>
+          <button type="button" onClick={() => set("rangoHorario", "")}
+            style={{ ...estiloFranja(!form.rangoHorario), gridColumn: "1 / -1" }}>
+            Cualquier hora
+          </button>
+          {FRANJAS.map(f => {
+            const texto = textoFranja(f);
+            const ocupados = (agendaForm[form.fecha] || {})[f.id] || 0;
+            const libres = TOPE_POR_FRANJA - ocupados;
+            const elegida = form.rangoHorario === texto;
+            return (
+              <button key={f.id} type="button" onClick={() => set("rangoHorario", texto)}
+                style={estiloFranja(elegida)}>
+                {f.etiqueta}
+                <span style={{ display: "block", fontSize: 10.5, fontWeight: 700, marginTop: 2, color: elegida ? "#ffffffcc" : (libres > 0 ? TEXT_TENUE : "#bf7d08") }}>
+                  {libres > 0 ? `${libres} libre${libres === 1 ? "" : "s"}` : `Completa · ${ocupados}`}
+                </span>
+              </button>
+            );
+          })}
         </div>
+        {form.rangoHorario && !FRANJAS.some(f => textoFranja(f) === form.rangoHorario) && (
+          <p style={{ color: TEXT_SUB, fontSize: 12, margin: "7px 0 0" }}>
+            Horario escrito a mano: <strong style={{ color: TEXT_MAIN }}>{form.rangoHorario}</strong>
+          </p>
+        )}
       </div>
       {form.tipoEntrega === "Domicilio" && (
         <Input label="Costo de envío (€)" type="number" min="0" step="0.01" value={form.envio} onChange={e => set("envio", e.target.value)} placeholder="Ej: 5" />
@@ -311,52 +555,7 @@ function FormularioPedido({ productos, clientes, repartidores, onGuardar, onCerr
       <Chips label="Repartidor" accent={ac} options={repartidoresFiltrados.map(r => ({ value: r.id, label: r.nombre }))}
         value={form.repartidorId} onChange={v => set("repartidorId", v)} />
 
-      <div style={{ background: "#101015", borderRadius: 14, padding: 14, marginBottom: 14, border: `1px solid ${ac}22` }}>
-        <p style={{ color: ac, fontSize: 13, fontWeight: 800, margin: "0 0 10px" }}>➕ Agregar producto</p>
-        <Select label="Producto" options={[{ value: "", label: "— Seleccionar —" }, ...productos.map(p => ({ value: p.id, label: p.nombre }))]}
-          value={item.productoId} onChange={e => {
-            const nuevo = productos.find(p => String(p.id) === String(e.target.value));
-            const pres = nuevo?.variantes?.[0]?.presentacion;
-            setItem(i => ({ ...i, productoId: e.target.value, precioManual: "", ...(pres ? { presentacion: pres } : {}) }));
-          }} />
-        {(() => {
-          // Las presentaciones son las del producto elegido: los cachitos van en bandeja de 6.
-          const prodSel = productos.find(p => String(p.id) === String(item.productoId));
-          const presentaciones = prodSel?.variantes?.map(v => v.presentacion) || ["Bandeja 25", "Bandeja 50"];
-          return <Chips label="Presentación" accent={ac} options={presentaciones}
-            value={presentaciones.includes(item.presentacion) ? item.presentacion : presentaciones[0]}
-            onChange={v => setItem(i => ({ ...i, presentacion: v }))} />;
-        })()}
-        <Chips label="Estado" accent={ac} options={["Congelado", "Frito"]} value={item.estado} onChange={v => setItem(i => ({ ...i, estado: v }))} />
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-          <Input label="Cantidad" type="number" min="1" value={item.cantidad} onChange={e => setItem(i => ({ ...i, cantidad: parseInt(e.target.value) || 1 }))} />
-          <Input label="Precio por bandeja (€)" type="number" min="0" step="0.01" value={item.precioManual ?? ""}
-            placeholder={item.productoId ? precioTarifa(item, productos).toFixed(2) : "—"}
-            onChange={e => setItem(i => ({ ...i, precioManual: e.target.value }))} />
-        </div>
-        {item.productoId && item.precioManual !== "" && item.precioManual !== undefined && !isNaN(parseFloat(item.precioManual)) && (
-          <p style={{ color: ACENTOS.gastos, fontSize: 12, margin: "0 0 10px", fontWeight: 700 }}>
-            Precio especial: {parseFloat(item.precioManual).toFixed(2)}€ · tarifa {precioTarifa(item, productos).toFixed(2)}€
-          </p>
-        )}
-        <div style={{ display: "grid", gridTemplateColumns: item.estado === "Frito" ? "1fr 1fr" : "1fr", gap: 8 }}>
-          <Input label="Comisión por unidad (€)" type="number" step="0.01" value={item.comision} onChange={e => setItem(i => ({ ...i, comision: e.target.value }))} placeholder="Ej: 2" />
-          {item.estado === "Frito" && (
-            <Input label="Recargo por Frito (€)" type="number" step="0.01" value={item.recargoFrito} onChange={e => setItem(i => ({ ...i, recargoFrito: e.target.value }))} placeholder="Ej: 5" />
-          )}
-        </div>
-        {item.productoId && (() => {
-          const precioUnit = precioFinalItem(item, productos);
-          return (
-            <p style={{ color: TEXT_SUB, fontSize: 12, margin: "0 0 10px" }}>
-              {precioUnit > 0
-                ? `Precio unitario final: ${precioUnit.toFixed(2)}€ · Total: ${(precioUnit * item.cantidad).toFixed(2)}€`
-                : "Sin precio asignado para esta presentación (poné el precio en Inventario)"}
-            </p>
-          );
-        })()}
-        <Btn onClick={agregarItem} small accent={ac}>Agregar</Btn>
-      </div>
+      <SelectorProductos productos={productos} ac={ac} onAgregar={agregarItem} />
 
       {form.items.length > 0 && (
         <div style={{ marginBottom: 14 }}>
@@ -540,6 +739,24 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
   const [filtroEstado, setFiltroEstado] = useState("Pendiente");
   const [filtroFecha, setFiltroFecha] = useState("");
 
+  /**
+   * Pedidos hechos en la tienda, a la espera de que alguien los acepte.
+   *
+   * No entran solos en la lista: la tienda es pública y cualquiera puede mandar
+   * uno falso. Aquí se ven, y se aceptan o se descartan de uno en uno.
+   */
+  const [webs, setWebs] = useState([]);
+  useEffect(() => onSnapshot(
+    collection(db, "pedidosWeb"),
+    (snap) => setWebs(snap.docs.map(d => ({ ...d.data(), _id: d.id }))),
+    (e) => console.error("No se pudieron leer los pedidos de la tienda.", e),
+  ), []);
+
+  const descartarWeb = (w) => {
+    if (!confirm(`¿Descartar el pedido de ${w.nombre}? No se podrá recuperar.`)) return;
+    deleteDoc(doc(db, "pedidosWeb", w._id)).catch(() => alert("No se pudo descartar; revisa la conexión."));
+  };
+
   const guardar = (p) => {
     const esNuevo = !editar;
     setPedidos(prev => esNuevo ? [p, ...prev] : prev.map(x => x.id === p.id ? p : x));
@@ -577,6 +794,27 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
     }
     setModal(false); setEditar(null);
   };
+
+  /**
+   * El pedido de la tienda pasa a ser un pedido de verdad: se le da un id propio,
+   * entra como Pendiente y sigue el mismo camino que uno escrito a mano (crea la
+   * ficha del cliente y descuenta stock). Después se quita de la bandeja, que es
+   * lo que evita que se vuelva a colar dos veces.
+   */
+  const aceptarWeb = (w) => {
+    const { _id, creado, km, ...datos } = w;
+    guardar({
+      ...datos,
+      id: generarId(),
+      estado: "Pendiente",
+      origen: "web",
+      repartidorId: datos.tipoEntrega === "Recogida" ? REPARTIDOR_TIENDA_ID : "",
+      total: totalesPedido(datos).total,
+    });
+    deleteDoc(doc(db, "pedidosWeb", _id)).catch(() =>
+      alert("El pedido se ha añadido, pero sigue en la bandeja: descártalo a mano cuando haya conexión."));
+  };
+
   const eliminar = (id) => { if (confirm("¿Eliminar pedido?")) setPedidos(p => p.filter(x => x.id !== id)); };
   const [estadoPendiente, setEstadoPendiente] = useState(null); // { id, estado }
   const cambiarEstado = (id, estado) => setEstadoPendiente({ id, estado });
@@ -605,7 +843,7 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <h2 style={{ color: ac, margin: 0 }}>📦 Pedidos</h2>
+        <h2 style={{ color: ac, margin: 0, fontFamily: TIPO_TIT, fontWeight: 800}}>Pedidos</h2>
         <Btn accent={ac} onClick={() => { setEditar(null); setModal(true); }}>+ Nuevo</Btn>
       </div>
 
@@ -615,6 +853,53 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
           value={filtroFecha} onChange={e => setFiltroFecha(e.target.value)} />
         {filtroFecha && <Btn small variant="secondary" onClick={() => setFiltroFecha("")}>✕ Limpiar fecha</Btn>}
       </div>
+
+      {webs.length > 0 && (
+        <Card accent="#22c55e" style={{ marginBottom: 14, border: "1px solid #22c55e55" }}>
+          <p style={{ color: "#22c55e", fontWeight: 900, margin: "0 0 10px", fontSize: 14 }}>
+            🌐 {webs.length} pedido{webs.length > 1 ? "s" : ""} nuevo{webs.length > 1 ? "s" : ""} de la tienda
+          </p>
+          {webs.map(w => {
+            const t = totalesPedido(w);
+            const bandejas = (w.items || []).reduce((n, it) => n + (Number(it.cantidad) || 0), 0);
+            return (
+              <div key={w._id} style={{ padding: "10px 0", borderTop: `1px solid ${BORDER}` }}>
+                <p style={{ color: TEXT_MAIN, fontWeight: 800, margin: 0, fontSize: 14 }}>
+                  {w.tipoEntrega === "Recogida" ? "🏪" : "🚚"} {w.nombre} · {t.total.toFixed(2)}€
+                </p>
+                <p style={{ color: TEXT_SUB, fontSize: 12.5, margin: "3px 0 0" }}>
+                  📞 {w.telefono} · 📅 {fechaLegible(w.fecha)}{w.rangoHorario ? ` · ⏰ ${w.rangoHorario}` : ""}
+                </p>
+                {w.tipoEntrega === "Domicilio" && (
+                  <p style={{ color: TEXT_SUB, fontSize: 12.5, margin: "3px 0 0" }}>
+                    📍 {w.direccion} {w.cp}{w.km ? ` · ${w.km} km` : ""}
+                  </p>
+                )}
+                {/* La tienda ya no bloquea las direcciones que no sitúa en el mapa:
+                    deja pedir y avisa aquí, para confirmarlas antes de salir. */}
+                {w.tipoEntrega === "Domicilio" && w.direccionComprobada === false && (
+                  <p style={{ color: "#bf7d08", fontSize: 12.5, fontWeight: 700, margin: "4px 0 0" }}>
+                    ⚠️ Dirección sin comprobar en el mapa · confírmala con el cliente
+                  </p>
+                )}
+                <p style={{ color: TEXT_SUB, fontSize: 12.5, margin: "3px 0 0" }}>
+                  🧺 {bandejas} bandeja{bandejas === 1 ? "" : "s"} · 💳 {w.formaPago}
+                </p>
+                {(w.items || []).map((it, i) => (
+                  <span key={i} style={{ fontSize: 12, background: BORDER, borderRadius: 8, padding: "3px 9px", marginRight: 4, marginTop: 5, display: "inline-block", color: TEXT_MAIN }}>
+                    {it.cantidad}x {it.nombreProducto} {it.presentacion} ({preparacionDe(it)})
+                  </span>
+                ))}
+                {w.nota && <p style={{ color: TEXT_SUB, fontSize: 12.5, margin: "5px 0 0", fontStyle: "italic" }}>📝 {w.nota}</p>}
+                <div style={{ display: "flex", gap: 6, marginTop: 9 }}>
+                  <Btn small variant="success" onClick={() => aceptarWeb(w)}>✓ Aceptar</Btn>
+                  <Btn small variant="danger" onClick={() => descartarWeb(w)}>✕ Descartar</Btn>
+                </div>
+              </div>
+            );
+          })}
+        </Card>
+      )}
 
       {filtrados.length === 0 ? <Empty texto="No hay pedidos con estos filtros" /> : Object.entries(porFecha).map(([dia, delDia]) => (
         <div key={dia}>
@@ -643,6 +928,8 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
                   <p style={{ color: TEXT_SUB, fontSize: 12.5, margin: "2px 0 0" }}>
                     {p.rangoHorario ? `⏰ ${p.rangoHorario}` : "Sin hora"} · {unidades} bandeja{unidades === 1 ? "" : "s"}
                   </p>
+                  {/* Quién lo lleva, sin tener que abrir el pedido. Si falta, se ve. */}
+                  <ChipRepartidor pedido={p} repartidores={repartidores} />
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <p style={{ color: ac, fontWeight: 800, margin: "0 0 4px", fontSize: 15 }}>{totalesPedido(p).total.toFixed(2)}€</p>
@@ -669,6 +956,13 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
                       <p style={{ color: ac, fontWeight: 800, margin: "6px 0 0", fontSize: 15 }}>Total: {totalesPedido(p).total.toFixed(2)}€</p>
                     </div>
                     <div style={{ display: "flex", gap: 6 }}>
+                      {/* Abre WhatsApp con la confirmación escrita; el envío lo da el dueño. */}
+                      <Btn small variant="secondary" accent="#22c55e"
+                        onClick={() => {
+                          const enlace = enlaceConfirmacion(p);
+                          if (!enlace) { alert("Este pedido no tiene un teléfono válido para WhatsApp."); return; }
+                          window.open(enlace, "_blank", "noopener");
+                        }}>💬</Btn>
                       <Btn small variant="secondary" onClick={() => { setEditar(p); setModal(true); }}>✏️</Btn>
                       <Btn small variant="success" onClick={() => setFacturaPedido(p)}>🧾</Btn>
                       <Btn small variant="secondary" onClick={() => setTicketPedido(p)}>🖨️</Btn>
@@ -687,23 +981,44 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
       ))}
 
       {(modal || editar) && (
-        <FormularioPedido productos={productos} clientes={clientes} repartidores={repartidores}
+        <FormularioPedido productos={productos} clientes={clientes} repartidores={repartidores} pedidos={pedidos}
           onGuardar={guardar} onCerrar={() => { setModal(false); setEditar(null); }} pedidoEditar={editar} />
       )}
       {facturaPedido && <FacturaPedido pedido={facturaPedido} onCerrar={() => setFacturaPedido(null)} />}
       {ticketPedido && <TicketPedido pedido={ticketPedido} repartidores={repartidores} onCerrar={() => setTicketPedido(null)} />}
 
-      {estadoPendiente && (
-        <Modal title="Confirmar cambio de estado" accent={ac} onClose={() => setEstadoPendiente(null)}>
-          <p style={{ color: TEXT_MAIN, fontSize: 15, margin: "0 0 20px" }}>
-            ¿Cambiar el estado a <strong style={{ color: ESTADO_COLORS[estadoPendiente.estado] }}>{estadoPendiente.estado}</strong>?
-          </p>
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-            <Btn variant="secondary" onClick={() => setEstadoPendiente(null)}>Cancelar</Btn>
-            <Btn accent={ESTADO_COLORS[estadoPendiente.estado]} onClick={confirmarEstado}>Guardar</Btn>
-          </div>
-        </Modal>
-      )}
+      {estadoPendiente && (() => {
+        const pedido = pedidos.find(x => x.id === estadoPendiente.id);
+        // Al confirmar es cuando toca avisar al cliente: el pedido de la web ya no
+        // pasa por WhatsApp, así que este es el primer mensaje que recibe.
+        const avisar = estadoPendiente.estado === "Confirmado";
+        const enlace = avisar ? enlaceConfirmacion(pedido) : null;
+        return (
+          <Modal title="Confirmar cambio de estado" accent={ac} onClose={() => setEstadoPendiente(null)}>
+            <p style={{ color: TEXT_MAIN, fontSize: 15, margin: "0 0 14px" }}>
+              ¿Cambiar el estado a <strong style={{ color: ESTADO_COLORS[estadoPendiente.estado] }}>{estadoPendiente.estado}</strong>?
+            </p>
+            {avisar && (
+              <p style={{ color: TEXT_SUB, fontSize: 13, margin: "0 0 18px", lineHeight: 1.5 }}>
+                {enlace
+                  ? <>Puedes avisar a <strong style={{ color: TEXT_MAIN }}>{pedido?.nombre}</strong> por WhatsApp. Se abre con el mensaje escrito; el envío lo das tú.</>
+                  : <>⚠️ No se puede avisar por WhatsApp: el teléfono <strong style={{ color: TEXT_MAIN }}>{pedido?.telefono || "—"}</strong> no es válido.</>}
+              </p>
+            )}
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
+              <Btn variant="secondary" onClick={() => setEstadoPendiente(null)}>Cancelar</Btn>
+              <Btn variant="secondary" onClick={confirmarEstado}>
+                {avisar ? "Solo confirmar" : "Guardar"}
+              </Btn>
+              {avisar && enlace && (
+                <Btn accent="#22c55e" onClick={() => { window.open(enlace, "_blank", "noopener"); confirmarEstado(); }}>
+                  💬 Confirmar y avisar
+                </Btn>
+              )}
+            </div>
+          </Modal>
+        );
+      })()}
     </div>
   );
 }
@@ -730,7 +1045,7 @@ function ModuloCalendario({ pedidos }) {
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <h2 style={{ color: ac, margin: 0 }}>📅 Calendario</h2>
+        <h2 style={{ color: ac, margin: 0, fontFamily: TIPO_TIT, fontWeight: 800}}>Calendario</h2>
         <div style={{ display: "flex", gap: 8 }}>
           <Btn small variant="secondary" onClick={() => setMesActual(new Date(año, mes - 1, 1))}>‹</Btn>
           <span style={{ color: TEXT_MAIN, fontWeight: 700, padding: "6px 12px" }}>{meses[mes]} {año}</span>
@@ -797,7 +1112,7 @@ function ModuloRutas({ pedidos }) {
 
   return (
     <div>
-      <h2 style={{ color: ac, margin: "0 0 16px" }}>🗺️ Rutas del Día</h2>
+      <h2 style={{ color: ac, margin: "0 0 16px", fontFamily: TIPO_TIT, fontWeight: 800}}>Rutas del Día</h2>
       <Input label="Fecha de la ruta" type="date" value={fechaRuta} onChange={e => setFechaRuta(e.target.value)} />
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 16 }}>
@@ -865,7 +1180,7 @@ function ModuloClientes({ clientes, setClientes, pedidos, irInicio }) {
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <h2 style={{ color: ac, margin: 0 }}>👥 Clientes</h2>
+        <h2 style={{ color: ac, margin: 0, fontFamily: TIPO_TIT, fontWeight: 800}}>Clientes</h2>
         <div style={{ display: "flex", gap: 8 }}>
           <Btn accent={ac} onClick={() => setModal(true)}>+ Nuevo</Btn>
         </div>
@@ -1011,7 +1326,7 @@ function ModuloMostrador({ productos, setProductos, jornadas, setJornadas }) {
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <h2 style={{ color: ac, margin: 0 }}>🏪 Mostrador</h2>
+        <h2 style={{ color: ac, margin: 0, fontFamily: TIPO_TIT, fontWeight: 800}}>Mostrador</h2>
         {cerradas.length > 0 && (
           <Btn small variant="secondary" onClick={() => setVerHistorico(v => !v)}>
             {verHistorico ? "Ocultar días" : "Ver días anteriores"}
@@ -1205,7 +1520,7 @@ function ModuloInventario({ productos, setProductos }) {
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <h2 style={{ color: ac, margin: 0 }}>📊 Inventario & Precios</h2>
+        <h2 style={{ color: ac, margin: 0, fontFamily: TIPO_TIT, fontWeight: 800}}>Inventario & Precios</h2>
         <Btn accent={ac} onClick={() => setModalProd(true)}>+ Nuevo Producto</Btn>
       </div>
 
@@ -1389,7 +1704,7 @@ function ModuloPersonal({ repartidores, setRepartidores, trabajadoras, setTrabaj
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <h2 style={{ color: acActivo, margin: 0, fontSize: 18, fontWeight: 900 }}>👥 Personal</h2>
+        <h2 style={{ color: acActivo, margin: 0, fontSize: 18, fontWeight: 900, fontFamily: TIPO_TIT, fontWeight: 800}}>Personal</h2>
       </div>
 
       {/* Selector de sección */}
@@ -1511,7 +1826,7 @@ function ModuloProveedores({ proveedores, setProveedores, irInicio }) {
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <h2 style={{ color: ac, margin: 0 }}>🚚 Proveedores</h2>
+        <h2 style={{ color: ac, margin: 0, fontFamily: TIPO_TIT, fontWeight: 800}}>Proveedores</h2>
         <div style={{ display: "flex", gap: 8 }}>
           <Btn accent={ac} onClick={abrirNuevo}>+ Nuevo</Btn>
         </div>
@@ -1613,7 +1928,7 @@ function ModuloCompras({ compras, setCompras, proveedores, ingredientes, setIngr
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <h2 style={{ color: ac, margin: 0 }}>🧺 Compras / Materia Prima</h2>
+        <h2 style={{ color: ac, margin: 0, fontFamily: TIPO_TIT, fontWeight: 800}}>Compras / Materia Prima</h2>
         <div style={{ display: "flex", gap: 8 }}>
           <Btn accent={ac} onClick={() => setModal(true)}>+ Nueva</Btn>
         </div>
@@ -1701,7 +2016,7 @@ function ModuloGastos({ gastos, setGastos, irInicio }) {
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <h2 style={{ color: ac, margin: 0 }}>🧹 Gastos</h2>
+        <h2 style={{ color: ac, margin: 0, fontFamily: TIPO_TIT, fontWeight: 800}}>Gastos</h2>
         <div style={{ display: "flex", gap: 8 }}>
           <Btn accent={ac} onClick={abrirNuevo}>+ Nuevo</Btn>
         </div>
@@ -1785,7 +2100,7 @@ function ModuloReporte({ pedidos, compras, gastos, producciones, trabajadoras, i
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <h2 style={{ color: ac, margin: 0 }}>📈 Reporte</h2>
+        <h2 style={{ color: ac, margin: 0, fontFamily: TIPO_TIT, fontWeight: 800}}>Reporte</h2>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
         <Input label="Desde" type="date" value={desde} onChange={e => setDesde(e.target.value)} />
@@ -1867,7 +2182,7 @@ function ModuloStock({ productos }) {
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <h2 style={{ color: ac, margin: 0, fontSize: 18, fontWeight: 900 }}>🗃️ Stock por Lotes</h2>
+        <h2 style={{ color: ac, margin: 0, fontSize: 18, fontWeight: 900, fontFamily: TIPO_TIT, fontWeight: 800}}>Stock por Lotes</h2>
       </div>
       <p style={{ color: TEXT_SUB, fontSize: 12, margin: "0 0 14px" }}>
         El stock se lleva en bandejas. Al lado van las unidades que suponen.
@@ -1986,7 +2301,7 @@ function ModuloProduccion({ producciones, setProducciones, trabajadoras, setTrab
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <button onClick={() => setVista("lista")} style={{ background: "none", border: "none", color: "#888", fontSize: 14, cursor: "pointer" }}>← Volver</button>
       </div>
-      <h2 style={{ color: ac, margin: "0 0 16px", fontSize: 18, fontWeight: 900 }}>Nueva Producción</h2>
+      <h2 style={{ color: ac, margin: "0 0 16px", fontSize: 18, fontWeight: 900, fontFamily: TIPO_TIT, fontWeight: 800}}>Nueva Producción</h2>
 
       <div style={{ background: BG_CARD, border: "1px solid #1d1e26", borderRadius: 14, padding: 16, marginBottom: 12 }}>
         <label style={{ color: "#666", fontSize: 12, fontWeight: 700, textTransform: "uppercase", display: "block", marginBottom: 6 }}>Fecha de producción</label>
@@ -2067,7 +2382,7 @@ function ModuloProduccion({ producciones, setProducciones, trabajadoras, setTrab
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <h2 style={{ color: ac, margin: 0, fontSize: 18, fontWeight: 900 }}>🏭 Producción</h2>
+        <h2 style={{ color: ac, margin: 0, fontSize: 18, fontWeight: 900, fontFamily: TIPO_TIT, fontWeight: 800}}>Producción</h2>
         <Btn accent={ac} onClick={() => setVista("nueva")}>+ Nueva</Btn>
       </div>
 
@@ -2119,17 +2434,16 @@ function ModuloProduccion({ producciones, setProducciones, trabajadoras, setTrab
 }
 
 // ─── APP PRINCIPAL (DISEÑO MODERNO) ─────────────────────────────────────────
-function ModuloAdmin({ proveedores, setProveedores, compras, setCompras, gastos, setGastos, ingredientes, setIngredientes, pedidos, producciones, trabajadoras, irInicio, exportarDatos, importarDatos, exportarExcel, cargarDemo, limpiarTodo }) {
+function ModuloAdmin({ proveedores, setProveedores, compras, setCompras, gastos, setGastos, ingredientes, setIngredientes, pedidos, producciones, trabajadoras, irInicio, exportarDatos, importarDatos }) {
   const [sub, setSub] = useState("proveedores");
-  const [confirmDemo, setConfirmDemo] = useState(false);
   const ac = ACENTOS.admin;
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <h2 style={{ color: ac, margin: 0, fontSize: 18, fontWeight: 900 }}>⚙️ Administración</h2>
+        <h2 style={{ color: ac, margin: 0, fontSize: 18, fontWeight: 900, fontFamily: TIPO_TIT, fontWeight: 800}}>Administración</h2>
       </div>
       <button onClick={exportarDatos} style={{
-        width: "100%", background: NAVY, border: "none", borderRadius: 12,
+        width: "100%", background: MARRON, border: "none", borderRadius: 12,
         color: "#fff", padding: "13px", fontSize: 15, fontWeight: 700,
         cursor: "pointer", marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "center", gap: 8
       }}>📤 Exportar Backup</button>
@@ -2142,31 +2456,10 @@ function ModuloAdmin({ proveedores, setProveedores, compras, setCompras, gastos,
         <input type="file" accept="application/json,.json" style={{ display: "none" }}
           onChange={e => { const f = e.target.files?.[0]; if (f) importarDatos(f); e.target.value = ""; }} />
       </label>
-      <button onClick={exportarExcel} style={{
-        width: "100%", background: "#217346", border: "none", borderRadius: 12,
-        color: "#fff", padding: "13px", fontSize: 15, fontWeight: 700,
-        cursor: "pointer", marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "center", gap: 8
-      }}>📊 Exportar Excel</button>
-      <button onClick={limpiarTodo} style={{
-        width: "100%", background: "#dc3545", border: "none", borderRadius: 12,
-        color: "#fff", padding: "13px", fontSize: 15, fontWeight: 700,
-        cursor: "pointer", marginBottom: 16
-      }}>🗑️ Borrar todo y reiniciar</button>
-      {!confirmDemo ? (
-        <button onClick={() => setConfirmDemo(true)} style={{
-          width: "100%", background: BG_CARD, border: `1px dashed ${BORDER}`, borderRadius: 12,
-          color: TEXT_SUB, padding: "11px", fontSize: 13, fontWeight: 600,
-          cursor: "pointer", marginBottom: 16
-        }}>🧪 Cargar datos de prueba</button>
-      ) : (
-        <div style={{ background: "#fff3cd", border: "1px solid #ffc107", borderRadius: 12, padding: 14, marginBottom: 16 }}>
-          <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 700, color: "#856404" }}>⚠️ Esto reemplazará todos los datos actuales con datos ficticios.</p>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={() => { cargarDemo(); setConfirmDemo(false); }} style={{ flex: 1, background: ORANGE, border: "none", borderRadius: 10, color: "#fff", padding: "10px", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>Sí, cargar demo</button>
-            <button onClick={() => setConfirmDemo(false)} style={{ flex: 1, background: BG_CARD, border: `1px solid ${BORDER}`, borderRadius: 10, color: TEXT_SUB, padding: "10px", fontWeight: 700, cursor: "pointer", fontSize: 13 }}>Cancelar</button>
-          </div>
-        </div>
-      )}
+      <p style={{ color: TEXT_SUB, fontSize: 12, margin: "4px 0 20px", lineHeight: 1.5 }}>
+        La copia se guarda en este dispositivo como un archivo. Restaurar sustituye lo
+        que haya ahora por lo que traiga el archivo, así que hazte una copia antes.
+      </p>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 20 }}>
         {TABS_ADMIN.map(t => (
           <button key={t.id} onClick={() => setSub(t.id)} style={{
@@ -2186,15 +2479,16 @@ function ModuloAdmin({ proveedores, setProveedores, compras, setCompras, gastos,
   );
 }
 
+// El `icon` es el nombre del dibujo en <Icono>, ya no un emoji.
 const TABS = [
-  { id: "pedidos",    label: "Pedidos",    icon: "📦" },
-  { id: "clientes",   label: "Clientes",   icon: "👥" },
-  { id: "inventario", label: "Inventario", icon: "📊" },
-  { id: "mostrador",  label: "Mostrador",  icon: "🏪" },
-  { id: "stock",      label: "Stock",      icon: "🗃️" },
-  { id: "produccion", label: "Producción", icon: "🏭" },
-  { id: "personal",   label: "Personal",   icon: "🧑‍💼" },
-  { id: "admin",      label: "Admin",      icon: "⚙️" },
+  { id: "pedidos",    label: "Pedidos",        icon: "pedidos" },
+  { id: "clientes",   label: "Clientes",       icon: "clientes" },
+  { id: "inventario", label: "Inventario",     icon: "inventario" },
+  { id: "mostrador",  label: "Mostrador",      icon: "mostrador" },
+  { id: "stock",      label: "Stock",          icon: "stock" },
+  { id: "produccion", label: "Producción",     icon: "produccion" },
+  { id: "personal",   label: "Personal",       icon: "personal" },
+  { id: "admin",      label: "Administración", icon: "admin" },
 ];
 
 const TABS_ADMIN = [
@@ -2209,56 +2503,223 @@ function cargarLS(key, fallback) {
 }
 
 // ─── MÓDULO: BIENVENIDA ──────────────────────────────────────────────────────
-function ModuloBienvenida({ setTab, pendientes, hoyEntregas }) {
-  const secciones = [
-    { id: "pedidos",    icon: "📦", label: "Pedidos",    desc: "Gestiona los pedidos del día", color: ACENTOS.pedidos },
-    { id: "clientes",   icon: "👥", label: "Clientes",   desc: "Directorio de clientes",       color: ACENTOS.clientes },
-    { id: "inventario", icon: "🏷️", label: "Inventario", desc: "Productos y precios",           color: ACENTOS.inventario },
-    { id: "mostrador",  icon: "🏪", label: "Mostrador",  desc: "Venta en el local",             color: ACENTOS.mostrador },
-    { id: "stock",      icon: "📦", label: "Stock",      desc: "Control de existencias",        color: ACENTOS.stock },
-    { id: "produccion", icon: "🏭", label: "Producción", desc: "Registro de producción",        color: ACENTOS.produccion },
-    { id: "personal",   icon: "👤", label: "Personal",   desc: "Repartidores y trabajadoras",   color: ACENTOS.personal },
-    { id: "admin",      icon: "⚙️", label: "Administración", desc: "Gastos, compras y reportes", color: ACENTOS.admin },
-  ];
+/**
+ * PANEL DEL DÍA — lo primero que se ve al entrar.
+ *
+ * Antes aquí había ocho botones, y el dueño tenía que entrar en cada pantalla
+ * para saber cómo iba el día. Ahora se ve de un vistazo y los botones viven en
+ * el menú lateral. Todo lo de aquí sale de los pedidos reales: si no hay
+ * pedidos, no se inventa nada, se dice que no hay.
+ */
+function ModuloBienvenida({ setTab, pedidos, productos }) {
+  const hoyISO = hoy();
+  const vivos = pedidos.filter(p => p.estado !== "Cancelado");
+  const delDia = vivos.filter(p => p.fecha === hoyISO);
+  /**
+   * Pendiente de verdad es el que todavía se puede atender: de hoy en adelante.
+   * Los de días pasados que nunca se pasaron a Entregado se cuentan aparte: si
+   * entran en la misma cifra, el panel marca 42 pendientes con la cocina parada.
+   */
+  const pendientes = pedidos.filter(p => p.estado === "Pendiente" && p.fecha >= hoyISO);
+  const olvidados = pedidos.filter(p => p.estado === "Pendiente" && p.fecha < hoyISO);
+
+  const euros = n => n.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
+  const suma = lista => lista.reduce((t, p) => t + totalesPedido(p).total, 0);
+
+  // ── Ventas de los últimos 14 días ──
+  const dias = Array.from({ length: 14 }, (_, i) => {
+    const f = new Date();
+    f.setDate(f.getDate() - (13 - i));
+    const iso = `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, "0")}-${String(f.getDate()).padStart(2, "0")}`;
+    return { iso, inicial: ["D", "L", "M", "X", "J", "V", "S"][f.getDay()], total: suma(vivos.filter(p => p.fecha === iso)) };
+  });
+  const techo = Math.max(...dias.map(d => d.total), 1);
+  const totalQuincena = dias.reduce((t, d) => t + d.total, 0);
+
+  // Geometría del gráfico de barras, calculada aquí para que el dibujo no mienta.
+  const BASE = 190, ALTO = 160, ANCHO = 24, PASO = 40, X0 = 34;
+  const barras = dias.map((d, i) => {
+    const h = (d.total / techo) * ALTO;
+    const x = X0 + i * PASO, y = BASE - h, r = Math.min(4, h);
+    return {
+      ...d, x, cx: x + ANCHO / 2, textoY: y - 5,
+      d: h <= 0 ? "" : `M${x},${BASE} V${y + r} Q${x},${y} ${x + r},${y} H${x + ANCHO - r} Q${x + ANCHO},${y} ${x + ANCHO},${y + r} V${BASE} Z`,
+    };
+  });
+
+  // ── Lo que más se vende este mes ──
+  const desde = inicioDeMes();
+  const delMes = vivos.filter(p => p.fecha >= desde);
+  const porProducto = {};
+  for (const p of delMes) {
+    for (const it of p.items || []) {
+      const nombre = it.nombreProducto || "—";
+      porProducto[nombre] = (porProducto[nombre] || 0) + (Number(it.cantidad) || 0);
+    }
+  }
+  const top = Object.entries(porProducto).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const topeTop = Math.max(...top.map(([, n]) => n), 1);
+
+  // ── Cómo lo reciben ──
+  const aDomicilio = delMes.filter(p => p.tipoEntrega !== "Recogida").length;
+  const porcentaje = delMes.length ? Math.round((aDomicilio / delMes.length) * 100) : 0;
+  const VUELTA = 2 * Math.PI * 44;
+  const ticket = delMes.length ? suma(delMes) / delMes.length : 0;
+  const bandejasHoy = delDia.reduce((t, p) => t + (p.items || []).reduce((n, it) => n + (Number(it.cantidad) || 0), 0), 0);
+
+  const Tarjeta = ({ children, ...resto }) => (
+    <div style={{ background: BG_CARD, border: `1px solid ${BORDER}`, borderRadius: 16, padding: "16px 18px", ...resto }}>{children}</div>
+  );
+  const Titulo = ({ children, pie }) => (
+    <>
+      <h2 style={{ margin: 0, fontFamily: TIPO_TIT, fontSize: 16, fontWeight: 700, color: MARRON }}>{children}</h2>
+      {pie && <p style={{ margin: "2px 0 14px", fontSize: 12, color: TEXT_TENUE }}>{pie}</p>}
+    </>
+  );
+
+  const largo = new Date().toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" });
+  const hoyLargo = largo.charAt(0).toUpperCase() + largo.slice(1);   // solo la primera letra
+
   return (
     <div>
-      {/* Cabecera compacta */}
-      <div style={{ textAlign: "center", padding: "12px 0 10px" }}>
-        <div style={{ fontSize: 36, marginBottom: 4 }}>👨‍🍳</div>
-        <h1 style={{ color: NAVY, margin: 0, fontSize: 22, fontWeight: 900 }}>Don Pepe Sabor</h1>
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 14, flexWrap: "wrap", marginBottom: 16 }}>
+        <div>
+          <p style={{ margin: 0, fontSize: 12.5, color: TEXT_SUB, fontWeight: 600 }}>{hoyLargo}</p>
+          <h1 style={{ margin: "2px 0 0", fontFamily: TIPO_TIT, fontSize: 27, fontWeight: 800, color: MARRON, lineHeight: 1.1 }}>Panel del día</h1>
+        </div>
+        <Btn accent={VINO} onClick={() => setTab("pedidos")}>Ver pedidos</Btn>
       </div>
 
-      {/* Resumen rápido */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 14, justifyContent: "center" }}>
-        <div style={{ background: ORANGE + "18", border: `2px solid ${ORANGE}44`, borderRadius: 12, padding: "8px 20px", textAlign: "center" }}>
-          <div style={{ fontSize: 22, fontWeight: 900, color: ORANGE }}>{hoyEntregas}</div>
-          <div style={{ fontSize: 11, color: TEXT_SUB, fontWeight: 600 }}>Hoy</div>
-        </div>
-        <div style={{ background: "#f59e0b18", border: `2px solid #f59e0b44`, borderRadius: 12, padding: "8px 20px", textAlign: "center" }}>
-          <div style={{ fontSize: 22, fontWeight: 900, color: "#f59e0b" }}>{pendientes}</div>
-          <div style={{ fontSize: 11, color: TEXT_SUB, fontWeight: 600 }}>Pendientes</div>
-        </div>
-      </div>
+      {olvidados.length > 0 && (
+        <button onClick={() => setTab("pedidos")}
+          style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, textAlign: "left", font: "inherit", cursor: "pointer", marginBottom: 14, background: "#bf7d0812", border: "1px solid #bf7d0855", borderRadius: 14, padding: "12px 15px" }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#bf7d08" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flex: "none" }}>
+            <circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16.5v.01" />
+          </svg>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ display: "block", fontSize: 13.5, fontWeight: 700, color: MARRON }}>
+              {olvidados.length} pedido{olvidados.length === 1 ? "" : "s"} de días pasados sigue{olvidados.length === 1 ? "" : "n"} en Pendiente
+            </span>
+            <span style={{ display: "block", fontSize: 12, color: TEXT_SUB }}>
+              Pásalos a Entregado o Cancelado para que dejen de contar
+            </span>
+          </span>
+          <span style={{ color: "#bf7d08", fontWeight: 800, fontSize: 13 }}>Ver</span>
+        </button>
+      )}
 
-      {/* Botones — 3 columnas, compactos */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
-        {secciones.map(s => (
-          <button key={s.id} onClick={() => setTab(s.id)} style={{
-            background: BG_CARD, border: `2px solid ${s.color}33`,
-            borderRadius: 14, padding: "12px 6px",
-            cursor: "pointer", textAlign: "center",
-            transition: "all .15s", boxShadow: "0 2px 6px #0001"
-          }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = s.color; e.currentTarget.style.boxShadow = `0 4px 12px ${s.color}33`; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = `${s.color}33`; e.currentTarget.style.boxShadow = "0 2px 6px #0001"; }}
-          >
-            <div style={{ fontSize: 26, marginBottom: 5 }}>{s.icon}</div>
-            <div style={{ fontSize: 12, fontWeight: 800, color: s.color, marginBottom: 2 }}>{s.label}</div>
-            <div style={{ fontSize: 10, color: TEXT_SUB, lineHeight: 1.3 }}>{s.desc}</div>
+      {/* Las cuatro cifras */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(138px, 1fr))", gap: 10, marginBottom: 14 }}>
+        {[
+          { label: "Ventas de hoy", valor: euros(suma(delDia)), pie: `${delDia.length} pedido${delDia.length === 1 ? "" : "s"}` },
+          { label: "Pendientes", valor: String(pendientes.length), pie: "por confirmar", al: "pedidos" },
+          { label: "Para hoy", valor: String(bandejasHoy), pie: `bandeja${bandejasHoy === 1 ? "" : "s"} a entregar` },
+          { label: "Ticket medio", valor: euros(ticket), pie: "este mes" },
+        ].map(c => (
+          <button key={c.label} onClick={() => c.al && setTab(c.al)}
+            style={{ background: BG_CARD, border: `1px solid ${BORDER}`, borderRadius: 16, padding: "14px 16px", textAlign: "left", cursor: c.al ? "pointer" : "default", font: "inherit" }}>
+            <p style={{ margin: 0, fontSize: 11, letterSpacing: ".1em", textTransform: "uppercase", color: TEXT_TENUE, fontWeight: 700 }}>{c.label}</p>
+            <p style={{ margin: "7px 0 0", fontFamily: TIPO_TIT, fontSize: 25, fontWeight: 800, color: MARRON, lineHeight: 1 }}>{c.valor}</p>
+            <p style={{ margin: "5px 0 0", fontSize: 12, color: TEXT_SUB }}>{c.pie}</p>
           </button>
         ))}
       </div>
 
+      {/* Ventas por día */}
+      <Tarjeta style={{ marginBottom: 14 }}>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <Titulo>Ventas de los últimos 14 días</Titulo>
+          <span style={{ fontSize: 12, color: TEXT_SUB }}>
+            Total <strong style={{ color: TEXT_MAIN }}>{euros(totalQuincena)}</strong>
+          </span>
+        </div>
+        {totalQuincena === 0 ? (
+          <Empty texto="Todavía no hay ventas registradas estos días" />
+        ) : (
+          <svg viewBox="0 0 600 215" style={{ width: "100%", height: "auto", display: "block", marginTop: 10 }}
+            role="img" aria-label={`Ventas diarias de los últimos catorce días. Total ${euros(totalQuincena)}.`}>
+            {[190, 150, 110, 70, 30].map(y => <line key={y} x1="30" y1={y} x2="585" y2={y} stroke={BORDER} strokeWidth="1" />)}
+            <text x="24" y="193" textAnchor="end" fontSize="9.5" fill={TEXT_TENUE}>0</text>
+            <text x="24" y="33" textAnchor="end" fontSize="9.5" fill={TEXT_TENUE}>{Math.round(techo)} €</text>
+            {barras.map(b => (
+              <g key={b.iso}>
+                {b.d && <path d={b.d} fill={VINO} />}
+                {b.total > 0 && b.total === techo && (
+                  <text x={b.cx} y={b.textoY} textAnchor="middle" fontSize="10" fontWeight="700" fill={TEXT_MAIN}>{Math.round(b.total)}</text>
+                )}
+                <text x={b.cx} y="205" textAnchor="middle" fontSize="9.5" fill={TEXT_TENUE}>{b.inicial}</text>
+              </g>
+            ))}
+          </svg>
+        )}
+      </Tarjeta>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 14 }}>
+        {/* Lo que más se vende */}
+        <Tarjeta>
+          <Titulo pie="Bandejas vendidas este mes">Lo que más se vende</Titulo>
+          {!top.length ? <Empty texto="Sin pedidos este mes" /> : top.map(([nombre, n]) => (
+            <div key={nombre} style={{ marginBottom: 11 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: 4 }}>
+                <span style={{ fontSize: 12.5, fontWeight: 600, color: TEXT_MAIN }}>{nombre}</span>
+                <span style={{ fontSize: 12.5, fontWeight: 800, color: TEXT_SUB }}>{n}</span>
+              </div>
+              <div style={{ height: 8, background: BG_APP, borderRadius: 999, overflow: "hidden" }}>
+                <div style={{ height: "100%", width: `${(n / topeTop) * 100}%`, background: VINO, borderRadius: 999 }} />
+              </div>
+            </div>
+          ))}
+        </Tarjeta>
+
+        {/* Cómo lo reciben */}
+        <Tarjeta>
+          <Titulo pie="Pedidos de este mes">Cómo lo reciben</Titulo>
+          {!delMes.length ? <Empty texto="Sin pedidos este mes" /> : (
+            <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
+              <svg viewBox="0 0 120 120" style={{ width: 118, height: 118, flex: "none" }}
+                role="img" aria-label={`${porcentaje} por ciento a domicilio, ${100 - porcentaje} por ciento recogida en tienda.`}>
+                <circle cx="60" cy="60" r="44" fill="none" stroke={ORO} strokeWidth="18" />
+                <circle cx="60" cy="60" r="44" fill="none" stroke={VINO} strokeWidth="18"
+                  strokeDasharray={`${(porcentaje / 100) * VUELTA} ${VUELTA}`} transform="rotate(-90 60 60)" />
+                <circle cx="60" cy="60" r="35" fill={BG_CARD} />
+                <text x="60" y="57" textAnchor="middle" fontFamily="Archivo, sans-serif" fontSize="21" fontWeight="800" fill={MARRON}>{delMes.length}</text>
+                <text x="60" y="71" textAnchor="middle" fontSize="9.5" fill={TEXT_TENUE}>pedidos</text>
+              </svg>
+              <div style={{ flex: 1, minWidth: 140 }}>
+                {[["A domicilio", VINO, porcentaje], ["Recogida en tienda", ORO, 100 - porcentaje]].map(([txt, color, pct]) => (
+                  <div key={txt} style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 11 }}>
+                    <span style={{ width: 11, height: 11, borderRadius: 3, background: color, flex: "none" }} />
+                    <span style={{ fontSize: 13, fontWeight: 600, color: TEXT_MAIN, flex: 1 }}>{txt}</span>
+                    <strong style={{ fontFamily: TIPO_TIT, fontSize: 15, color: MARRON }}>{pct} %</strong>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </Tarjeta>
+      </div>
+
+      {/* Lo que toca hoy */}
+      <Tarjeta style={{ marginTop: 14 }}>
+        <Titulo pie={delDia.length ? `${delDia.length} entrega${delDia.length === 1 ? "" : "s"}` : null}>Lo siguiente</Titulo>
+        {!delDia.length ? <Empty texto="Hoy no hay entregas" /> : (
+          delDia.slice(0, 4).map(p => (
+            <button key={p.id} onClick={() => setTab("pedidos")}
+              style={{ width: "100%", display: "flex", alignItems: "center", gap: 11, padding: "10px 0", borderTop: `1px solid ${BG_APP}`, background: "none", border: "none", cursor: "pointer", textAlign: "left", font: "inherit" }}>
+              <span style={{ width: 34, height: 34, borderRadius: 10, background: VINO + "14", display: "grid", placeItems: "center", flex: "none" }}>
+                <Icono nombre="pedidos" color={VINO} tam={17} />
+              </span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: "block", fontSize: 13.5, fontWeight: 700, color: TEXT_MAIN }}>{p.nombre}</span>
+                <span style={{ display: "block", fontSize: 12, color: TEXT_SUB }}>
+                  {p.rangoHorario ? `${p.rangoHorario} · ` : ""}{quienEntrega(p, [])}
+                </span>
+              </span>
+              <span style={{ fontFamily: TIPO_TIT, fontWeight: 800, fontSize: 14, color: VINO }}>{euros(totalesPedido(p).total)}</span>
+            </button>
+          ))
+        )}
+      </Tarjeta>
     </div>
   );
 }
@@ -2308,6 +2769,8 @@ const PRODUCCIONES_DEMO  = [];
 
 export default function AppModerno() {
   const [tab, setTab] = useState("inicio");
+  const [menuAbierto, setMenuAbierto] = useState(false);
+  const menuFijo = usePantallaAncha();   // en pantalla ancha el menú no se esconde
   const [pedidos, setPedidos] = useState(() => cargarLS("pedidos", PEDIDOS_DEMO));
   const [clientes, setClientes] = useState(() => cargarLS("clientes", CLIENTES_DEMO));
   const [productos, setProductos] = useState(() => {
@@ -2348,6 +2811,25 @@ export default function AppModerno() {
   useEffect(() => { if (listo) sync("jornadas", jornadas); }, [JSON.stringify(jornadas)]);
 
   /**
+   * Agenda pública de huecos.
+   *
+   * La tienda necesita saber qué franjas están llenas, pero NO puede leer los
+   * pedidos: ahí están los nombres, teléfonos y direcciones de los clientes, y
+   * eso no sale de aquí. Así que se publica aparte un resumen que solo dice
+   * cuántos repartos hay en cada franja de cada día. Sin nombres, sin importes,
+   * sin nada de nadie.
+   *
+   * Solo de hoy en adelante: el pasado no le sirve a la tienda para nada.
+   */
+  useEffect(() => {
+    if (!listo) return;
+    const desde = hoy();
+    const futuros = pedidos.filter(p => (p.fecha || "") >= desde);
+    const agenda = ocupacion(futuros);
+    setDoc(doc(db, "datos", "agenda"), { valor: JSON.stringify(agenda) }).catch(() => {});
+  }, [listo, JSON.stringify(pedidos)]);
+
+  /**
    * Primero se LEE la nube, y solo después se escribe.
    *
    * Antes solo se escuchaban los pedidos: el resto (productos, clientes, gastos…) se
@@ -2385,41 +2867,12 @@ export default function AppModerno() {
   }, []);
 
   const ac = ACENTOS[tab] || ACENTOS.pedidos;
-  const pendientes = pedidos.filter(p => p.estado === "Pendiente").length;
+  // Igual que en el panel: solo cuentan los pendientes que aún se pueden atender.
+  const pendientes = pedidos.filter(p => p.estado === "Pendiente" && p.fecha >= hoy()).length;
   const hoyEntregas = pedidos.filter(p => p.fecha === hoy() && p.estado !== "Cancelado").length;
   const irInicio = () => setTab("inicio");
 
-  const limpiarTodo = () => {
-    const clave = window.prompt("Introduce la contraseña para borrar todos los datos:");
-    if (clave === null) return;
-    if (clave !== "00001234") { alert("Contraseña incorrecta."); return; }
-    if (!window.confirm("¿Borrar TODOS los datos (pedidos, clientes, gastos, etc.) y dejar solo productos y repartidores?")) return;
-    const productosLimpios = PRODUCTOS_DEMO.map(p => ({ ...p, variantes: p.variantes.map(v => ({ ...v, stock: 0, lotes: [] })) }));
-    const repartidoresLimpios = REPARTIDORES_DEMO;
-    setPedidos([]);         sync("pedidos", []);
-    setClientes([]);        sync("clientes", []);
-    setProductos(productosLimpios); sync("productos", productosLimpios);
-    setProveedores([]);     sync("proveedores", []);
-    setCompras([]);         sync("compras", []);
-    setGastos([]);          sync("gastos", []);
-    setRepartidores(repartidoresLimpios); sync("repartidores", repartidoresLimpios);
-    setProducciones([]);    sync("producciones", []);
-    setTrabajadoras([]);    sync("trabajadoras", []);
-    setIngredientes([]);    sync("ingredientes", []);
-    alert("Datos borrados. Solo quedan productos y repartidores.");
-  };
 
-  const cargarDemo = () => {
-    setPedidos(PEDIDOS_DEMO);
-    setClientes(CLIENTES_DEMO);
-    setProductos(PRODUCTOS_DEMO.map(p => ({ ...p, variantes: p.variantes.map(v => ({ ...v, stock: v.stock ?? 0, lotes: v.lotes || [] })) })));
-    setProveedores(PROVEEDORES_DEMO);
-    setCompras(COMPRAS_DEMO);
-    setGastos(GASTOS_DEMO);
-    setRepartidores([...REPARTIDORES_INICIALES, ...REPARTIDORES_DEMO]);
-    setProducciones(PRODUCCIONES_DEMO);
-    setTrabajadoras(TRABAJADORAS_DEMO);
-  };
 
   const exportarDatos = () => {
     const datos = { pedidos, clientes, productos, proveedores, compras, ingredientes, gastos, repartidores, producciones, trabajadoras, jornadas, exportado: new Date().toISOString() };
@@ -2462,63 +2915,6 @@ export default function AppModerno() {
     lector.readAsText(archivo);
   };
 
-  const exportarExcel = async () => {
-    const XLSX = await import("xlsx");
-    const wb = XLSX.utils.book_new();
-
-    // Hoja Pedidos
-    const filaPedidos = pedidos.map(p => ({
-      Fecha: p.fecha,
-      Cliente: p.nombre,
-      Teléfono: p.telefono,
-      Dirección: p.direccion || "",
-      CP: p.cp || "",
-      Estado: p.estado,
-      "Tipo entrega": p.tipoEntrega || "",
-      "Forma pago": p.formaPago || "",
-      "Rango horario": p.rangoHorario || "",
-      Repartidor: repartidores.find(r => r.id === p.repartidorId)?.nombre || "",
-      Productos: (p.items || []).map(i => `${i.nombreProducto} ${i.presentacion} ×${i.cantidad} (${preparacionDe(i)})`).join(" | "),
-      "Fritura (€)": totalesPedido(p).servicio,
-      "Envío (€)": totalesPedido(p).envio,
-      "Total (€)": totalesPedido(p).total,
-      Notas: p.notas || "",
-    }));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filaPedidos), "Pedidos");
-
-    // Hoja Clientes
-    const filaClientes = clientes.map(c => ({
-      Nombre: c.nombre,
-      Teléfono: c.telefono,
-      Dirección: c.direccion || "",
-      CP: c.cp || "",
-      Email: c.email || "",
-      Notas: c.notas || "",
-    }));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filaClientes), "Clientes");
-
-    // Hoja Producción
-    const filaProduccion = producciones.map(p => ({
-      Fecha: p.fecha,
-      Trabajadora: trabajadoras.find(t => t.id === p.trabajadoraId)?.nombre || "",
-      Número: trabajadoras.find(t => t.id === p.trabajadoraId)?.numero || "",
-      Producto: p.nombreProducto || "",
-      Presentación: p.presentacion || "",
-      Bandejas: p.cantidad || 0,
-    }));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filaProduccion), "Producción");
-
-    // Hoja Gastos
-    const filaGastos = gastos.map(g => ({
-      Fecha: g.fecha,
-      Descripción: g.descripcion || "",
-      Categoría: g.categoria || "",
-      "Importe (€)": g.importe || 0,
-    }));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filaGastos), "Gastos");
-
-    XLSX.writeFile(wb, `donpepesabor-${hoy()}.xlsx`);
-  };
 
   const soloVista = new URLSearchParams(window.location.search).has("preview");
   const [toastVista, setToastVista] = useState(false);
@@ -2537,44 +2933,54 @@ export default function AppModerno() {
   } : undefined;
 
   return (
-    <div style={{ background: BG_APP, minHeight: "100vh", fontFamily: "'Inter', sans-serif", color: TEXT_MAIN }}>
+    <div style={{ background: BG_APP, minHeight: "100vh", fontFamily: TIPO, color: TEXT_MAIN }}>
       {soloVista && (
-        <div style={{ background: ORANGE, color: "#fff", textAlign: "center", padding: "8px 16px", fontSize: 13, fontWeight: 700, position: "sticky", top: 0, zIndex: 200 }}>
+        <div style={{ background: VINO, color: "#fff", textAlign: "center", padding: "8px 16px", fontSize: 13, fontWeight: 700, position: "sticky", top: 0, zIndex: 200 }}>
           👁 Modo Vista — Solo lectura
         </div>
       )}
       {toastVista && (
-        <div style={{ position: "fixed", top: soloVista ? 80 : 16, left: "50%", transform: "translateX(-50%)", background: NAVY, color: "#fff", borderRadius: 12, padding: "10px 20px", fontWeight: 700, fontSize: 14, zIndex: 999, boxShadow: "0 4px 20px #0003" }}>
+        <div style={{ position: "fixed", top: soloVista ? 80 : 16, left: "50%", transform: "translateX(-50%)", background: MARRON, color: "#fff", borderRadius: 12, padding: "10px 20px", fontWeight: 700, fontSize: 14, zIndex: 999, boxShadow: "0 4px 20px #0003" }}>
           🔒 Solo puedes ver, no hacer cambios
         </div>
       )}
-      {/* Header azul marino */}
-      <div style={{ background: NAVY, padding: "14px 20px", boxShadow: "0 2px 12px #0003" }}>
-        <div style={{ maxWidth: 760, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <button onClick={irInicio} style={{ background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0 }}>
-            <h1 style={{ color: "#fff", margin: 0, fontSize: 22, fontWeight: 900, letterSpacing: -0.5 }}>👨‍🍳 Don Pepe Sabor</h1>
-          </button>
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            {pendientes > 0 && (
-              <div style={{ textAlign: "center", background: "#ffffff22", borderRadius: 12, padding: "6px 12px" }}>
-                <p style={{ color: "#fff", fontWeight: 800, fontSize: 18, margin: 0 }}>{pendientes}</p>
-                <p style={{ color: "#94b4d4", fontSize: 10, margin: 0 }}>Pendientes</p>
-              </div>
-            )}
-            <div style={{ textAlign: "center", background: ORANGE + "33", borderRadius: 12, padding: "6px 12px" }}>
-              <p style={{ color: ORANGE, fontWeight: 800, fontSize: 18, margin: 0 }}>{hoyEntregas}</p>
-              <p style={{ color: "#94b4d4", fontSize: 10, margin: 0 }}>Hoy</p>
-            </div>
-            <button onClick={irInicio} style={{ background: "#ffffff22", border: "none", borderRadius: 10, color: "#fff", padding: "8px 14px", cursor: "pointer", fontSize: 13, fontWeight: 700 }}>
-              🏠 Inicio
+      {/* Cabecera. Solo en pantalla estrecha: con el menú fijo, la marca vive
+          dentro del propio menú y la barra de arriba sobra. */}
+      {!menuFijo && (
+      <div style={{ background: MARRON, padding: "12px 16px", position: "sticky", top: 0, zIndex: 60, boxShadow: "0 2px 14px rgba(42,18,0,.25)" }}>
+        {/* El botón va a la izquierda, del mismo lado por el que entra el menú. */}
+        <div style={{ maxWidth: menuFijo ? "none" : 760, margin: "0 auto", display: "flex", alignItems: "center", gap: 11 }}>
+          {!menuFijo && (
+            <button onClick={() => setMenuAbierto(true)} aria-label="Abrir el menú"
+              style={{ width: 42, height: 42, borderRadius: 11, border: "1px solid #ffffff2e", background: "#ffffff1a", cursor: "pointer", display: "grid", placeItems: "center", flex: "none", position: "relative" }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={BG_APP} strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+              {pendientes > 0 && (
+                <span style={{ position: "absolute", top: -4, right: -4, minWidth: 18, height: 18, padding: "0 4px", borderRadius: 999, background: VINO, color: "#fff", fontSize: 11, fontWeight: 800, display: "grid", placeItems: "center", border: `2px solid ${MARRON}` }}>
+                  {pendientes}
+                </span>
+              )}
             </button>
-          </div>
+          )}
+          <button onClick={irInicio} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 11, flex: 1, minWidth: 0, textAlign: "left" }}>
+            <img src="/logo-donpepe.png" alt="" style={{ width: 42, height: 42, objectFit: "contain", borderRadius: 10, background: BG_APP, flex: "none" }} />
+            <span style={{ minWidth: 0 }}>
+              <span style={{ display: "block", fontFamily: TIPO_TIT, fontWeight: 800, fontSize: 16, color: "#fff" }}>
+                Don Pepe <span style={{ color: ORO }}>Sabor</span>
+              </span>
+              <span style={{ display: "block", fontSize: 9.5, letterSpacing: ".18em", textTransform: "uppercase", color: "#c3a98f", fontWeight: 600 }}>
+                Gestión interna
+              </span>
+            </span>
+          </button>
         </div>
       </div>
+      )}
 
-      {/* Contenido */}
-      <div className="main-content" style={{ maxWidth: 760, margin: "0 auto" }} onClickCapture={bloquearClick}>
-        {tab === "inicio" && <ModuloBienvenida setTab={setTab} pendientes={pendientes} hoyEntregas={hoyEntregas} />}
+      {/* Contenido. Con el menú fijo se aparta para no quedar debajo, y se le
+          deja más ancho: en un monitor, 760 px dejaban media pantalla vacía. */}
+      <div style={{ paddingLeft: menuFijo ? ANCHO_MENU : 0 }}>
+      <div className="main-content" style={{ maxWidth: menuFijo ? 1180 : 760, margin: "0 auto" }} onClickCapture={bloquearClick}>
+        {tab === "inicio" && <ModuloBienvenida setTab={setTab} pedidos={pedidos} productos={productos} />}
         {tab === "pedidos" && <ModuloPedidos pedidos={pedidos} setPedidos={setPedidos} productos={productos} setProductos={setProductos} clientes={clientes} setClientes={setClientes} repartidores={repartidores} />}
         {tab === "clientes" && <ModuloClientes clientes={clientes} setClientes={setClientes} pedidos={pedidos} />}
         {tab === "inventario" && <ModuloInventario productos={productos} setProductos={setProductos} />}
@@ -2582,30 +2988,80 @@ export default function AppModerno() {
         {tab === "stock" && <ModuloStock productos={productos} />}
         {tab === "produccion" && <ModuloProduccion producciones={producciones} setProducciones={setProducciones} trabajadoras={trabajadoras} setTrabajadoras={setTrabajadoras} productos={productos} setProductos={setProductos} />}
         {tab === "personal" && <ModuloPersonal repartidores={repartidores} setRepartidores={setRepartidores} trabajadoras={trabajadoras} setTrabajadoras={setTrabajadoras} />}
-        {tab === "admin" && <ModuloAdmin proveedores={proveedores} setProveedores={setProveedores} compras={compras} setCompras={setCompras} gastos={gastos} setGastos={setGastos} ingredientes={ingredientes} setIngredientes={setIngredientes} pedidos={pedidos} producciones={producciones} trabajadoras={trabajadoras} exportarDatos={exportarDatos} importarDatos={importarDatos} exportarExcel={exportarExcel} cargarDemo={cargarDemo} limpiarTodo={limpiarTodo} />}
+        {tab === "admin" && <ModuloAdmin proveedores={proveedores} setProveedores={setProveedores} compras={compras} setCompras={setCompras} gastos={gastos} setGastos={setGastos} ingredientes={ingredientes} setIngredientes={setIngredientes} pedidos={pedidos} producciones={producciones} trabajadoras={trabajadoras} exportarDatos={exportarDatos} importarDatos={importarDatos} />}
+      </div>
       </div>
 
-      {/* Navegación inferior */}
-      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: NAVY, zIndex: 50, boxShadow: "0 -2px 12px #0003" }}>
-        <div className="nav-tabs" style={{ maxWidth: 760, margin: "0 auto" }}>
-          {TABS.map(t => {
+      {/* Menú lateral. Fijo si hay sitio; si no, un cajón con velo por delante. */}
+      {menuAbierto && !menuFijo && (
+        <div onClick={() => setMenuAbierto(false)}
+          style={{ position: "fixed", inset: 0, background: "#2a120066", zIndex: 70 }} />
+      )}
+      <nav aria-label="Menú principal" aria-hidden={!menuFijo && !menuAbierto}
+        style={{
+          position: "fixed", top: 0, left: 0, bottom: 0,
+          width: ANCHO_MENU, maxWidth: menuFijo ? ANCHO_MENU : "82vw",
+          background: BG_CARD, zIndex: menuFijo ? 40 : 80, display: "flex", flexDirection: "column",
+          boxShadow: menuFijo ? "none" : "18px 0 50px rgba(42,18,0,.28)",
+          borderRight: menuFijo ? `1px solid ${BORDER}` : "none",
+          transform: menuFijo || menuAbierto ? "translateX(0)" : "translateX(-105%)",
+          transition: "transform .22s ease",
+        }}>
+        {/* Con el menú fijo, la marca va aquí arriba, como en la tienda. */}
+        {menuFijo ? (
+          <button onClick={irInicio}
+            style={{ background: MARRON, border: "none", cursor: "pointer", padding: "15px 18px", display: "flex", alignItems: "center", gap: 11, textAlign: "left" }}>
+            <img src="/logo-donpepe.png" alt="" style={{ width: 40, height: 40, objectFit: "contain", borderRadius: 10, background: BG_APP, flex: "none" }} />
+            <span style={{ minWidth: 0 }}>
+              <span style={{ display: "block", fontFamily: TIPO_TIT, fontWeight: 800, fontSize: 15, color: "#fff" }}>
+                Don Pepe <span style={{ color: ORO }}>Sabor</span>
+              </span>
+              <span style={{ display: "block", fontSize: 9, letterSpacing: ".18em", textTransform: "uppercase", color: "#c3a98f", fontWeight: 600 }}>
+                Gestión interna
+              </span>
+            </span>
+          </button>
+        ) : (
+          <div style={{ padding: "16px 18px 12px", borderBottom: `1px solid ${BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span style={{ fontSize: 11, letterSpacing: ".16em", textTransform: "uppercase", color: TEXT_TENUE, fontWeight: 700 }}>Menú</span>
+            <button onClick={() => setMenuAbierto(false)} aria-label="Cerrar el menú"
+              style={{ width: 30, height: 30, borderRadius: 9, border: `1px solid ${BORDER}`, background: BG_APP, cursor: "pointer", display: "grid", placeItems: "center" }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={TEXT_SUB} strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+            </button>
+          </div>
+        )}
+
+        <div style={{ flex: 1, overflowY: "auto", padding: "8px 10px" }}>
+          {[{ id: "inicio", label: "Panel del día", icon: "inicio" }, ...TABS].map(t => {
             const activo = tab === t.id;
-            const color = ACENTOS[t.id];
+            const color = ACENTOS[t.id] || VINO;
             return (
-              <button key={t.id} onClick={() => setTab(t.id)} style={{
-                flex: "1 0 auto", minWidth: 60, display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
-                background: activo ? "#ffffff22" : "transparent",
-                border: "none",
-                borderTop: activo ? `3px solid ${color}` : "3px solid transparent",
-                borderRadius: 0, padding: "8px 6px", cursor: "pointer", transition: "all .15s"
-              }}>
-                <span style={{ fontSize: 18 }}>{t.icon}</span>
-                <span style={{ fontSize: 10, fontWeight: 700, color: activo ? color : "#94b4d4" }}>{t.label}</span>
+              <button key={t.id} onClick={() => { setTab(t.id); setMenuAbierto(false); }}
+                style={{
+                  width: "100%", display: "flex", alignItems: "center", gap: 12,
+                  padding: "11px 12px", marginBottom: 1, borderRadius: 11, border: "none", cursor: "pointer",
+                  background: activo ? color : "transparent",
+                  color: activo ? "#fff" : TEXT_MAIN, textAlign: "left",
+                }}>
+                <Icono nombre={t.icon} color={activo ? "#fff" : color} />
+                <span style={{ fontSize: 14, fontWeight: activo ? 700 : 600 }}>{t.label}</span>
+                {t.id === "pedidos" && pendientes > 0 && (
+                  <span style={{ marginLeft: "auto", background: activo ? "#ffffff2e" : VINO, color: "#fff", borderRadius: 999, padding: "1px 8px", fontSize: 11.5, fontWeight: 800 }}>
+                    {pendientes}
+                  </span>
+                )}
               </button>
             );
           })}
         </div>
-      </div>
+
+        <div style={{ padding: "12px 18px 16px", borderTop: `1px solid ${BORDER}` }}>
+          <p style={{ margin: 0, fontSize: 11.5, color: TEXT_TENUE }}>Sesión de</p>
+          <p style={{ margin: "1px 0 0", fontSize: 12.5, fontWeight: 700, color: TEXT_MAIN, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {auth.currentUser?.email || "—"}
+          </p>
+        </div>
+      </nav>
     </div>
   );
 }
