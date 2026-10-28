@@ -3,7 +3,7 @@ import { auth, db } from "./firebase";
 import { collection, deleteDoc, doc, onSnapshot, setDoc } from "firebase/firestore";
 import { DIRECCION_LOCAL, bandejasFritas, enlaceConfirmacion, fechaLegible, preparacionDe, quienEntrega, siguienteCodigo, totalesPedido, whatsappDe } from "./pedidos.js";
 import {
-  DOCUMENTOS, EMPRESA_VACIA, FISCAL_VACIO, desglosaIva, empresaLista,
+  DOCUMENTOS, EMPRESA_VACIA, FISCAL_VACIO, desglosaIva, empresaLista, fusionaEmpresa,
   faltaParaFacturar, mesLegible, pideFiscal, textoDocumento,
 } from "./documentos.js";
 import { cuentasJornada, disponibles } from "./mostrador.js";
@@ -761,7 +761,7 @@ function TicketPedido({ pedido, repartidores, onCerrar }) {
           <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.05 }}>{numeroPedido}</div>
         </div>
         <div style={{ textAlign: "center", fontWeight: 700, fontSize: 15 }}>DON PEPE SABOR</div>
-        <div style={{ textAlign: "center", fontSize: 11 }}>Calle Berrocal 7, 28021 Madrid</div>
+        <div style={{ textAlign: "center", fontSize: 11 }}>{DIRECCION_LOCAL}</div>
         <div style={{ textAlign: "center", fontSize: 11 }}>WhatsApp 604 136 371</div>
         <Raya />
         <div style={{ textAlign: "center", fontSize: 11 }}>COMPROBANTE DE PEDIDO</div>
@@ -888,7 +888,7 @@ function AlbaranPedido({ pedido, empresa, onCerrar }) {
   const conPrecios = !pedido.albaranSinPrecios;
   const euros = n => (n || 0).toFixed(2) + " €";
   const numero = pedido.codigo || `#${String(pedido.id).slice(-4).toUpperCase()}`;
-  const emp = { ...EMPRESA_VACIA, ...(empresa || {}) };
+  const emp = fusionaEmpresa(empresa);
 
   const Linea = ({ izq, der, fuerte }) => (
     <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "6px 0",
@@ -915,8 +915,12 @@ function AlbaranPedido({ pedido, empresa, onCerrar }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
           <div>
             <div style={{ fontWeight: 700, fontSize: 18 }}>{emp.nombre}</div>
+            {/* Quien factura va debajo del nombre comercial, como en el albarán
+                del cliente: el papel lo pide, pero la gente conoce el otro. */}
+            {emp.razonSocial && emp.razonSocial !== emp.nombre &&
+              <div style={{ fontSize: 12 }}>{emp.razonSocial}</div>}
             <div style={{ fontSize: 12 }}>{emp.direccion || DIRECCION_LOCAL}</div>
-            {emp.nif && <div style={{ fontSize: 12 }}>NIF {emp.nif}</div>}
+            {emp.nif && <div style={{ fontSize: 12 }}>CIF {emp.nif}</div>}
             <div style={{ fontSize: 12 }}>WhatsApp {emp.telefono}</div>
           </div>
           <div style={{ textAlign: "right" }}>
@@ -999,7 +1003,7 @@ function AlbaranPedido({ pedido, empresa, onCerrar }) {
 function FacturaPedido({ pedido, empresa, onCerrar }) {
   const ac = ACENTOS.pedidos;
   const { servicio, envio, total } = totalesPedido(pedido);
-  const emp = { ...EMPRESA_VACIA, ...(empresa || {}) };
+  const emp = fusionaEmpresa(empresa);
   const f = { ...FISCAL_VACIO, ...(pedido.fiscal || {}) };
   const valida = empresaLista(emp);
   const { tipo, base, cuota } = desglosaIva(total, emp.iva);
@@ -1042,8 +1046,10 @@ function FacturaPedido({ pedido, empresa, onCerrar }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
           <div>
             <div style={{ fontWeight: 700, fontSize: 18 }}>{emp.nombre}</div>
+            {emp.razonSocial && emp.razonSocial !== emp.nombre &&
+              <div style={{ fontSize: 12 }}>{emp.razonSocial}</div>}
             <div style={{ fontSize: 12 }}>{emp.direccion || DIRECCION_LOCAL}</div>
-            <div style={{ fontSize: 12 }}>{emp.nif ? `NIF ${emp.nif}` : "NIF: pendiente"}</div>
+            <div style={{ fontSize: 12 }}>{emp.nif ? `CIF ${emp.nif}` : "CIF: pendiente"}</div>
             <div style={{ fontSize: 12 }}>WhatsApp {emp.telefono}</div>
           </div>
           <div style={{ textAlign: "right" }}>
@@ -1100,7 +1106,7 @@ function FacturaPedido({ pedido, empresa, onCerrar }) {
  */
 function ResumenMes({ pedidos, empresa, onCerrar }) {
   const ac = ACENTOS.pedidos;
-  const emp = { ...EMPRESA_VACIA, ...(empresa || {}) };
+  const emp = fusionaEmpresa(empresa);
   const [mes, setMes] = useState(() => hoy().slice(0, 7));
 
   // Solo albaranes: un ticket ya se cobró y una factura ya se emitió aparte.
@@ -3077,7 +3083,7 @@ function ModuloProduccion({ producciones, setProducciones, trabajadoras, setTrab
 // ─── APP PRINCIPAL (DISEÑO MODERNO) ─────────────────────────────────────────
 function ModuloAdmin({ proveedores, setProveedores, compras, setCompras, gastos, setGastos, ingredientes, setIngredientes, pedidos, setPedidos, producciones, trabajadoras, empresa, setEmpresa, irInicio, exportarDatos, importarDatos }) {
   const [sub, setSub] = useState("proveedores");
-  const emp = { ...EMPRESA_VACIA, ...(empresa || {}) };
+  const emp = fusionaEmpresa(empresa);
   const [corte, setCorte] = useState(inicioDeMes);
   const [confirmarBorrado, setConfirmarBorrado] = useState(false);
 
@@ -3119,20 +3125,35 @@ function ModuloAdmin({ proveedores, setProveedores, compras, setCompras, gastos,
           las facturas salen marcadas como <strong>proforma</strong>, sin validez.
           Confirma con tu gestor el tipo de IVA y si te aplica Verifactu.
         </p>
-        <Input label="Nombre o razón social" value={emp.nombre}
+        <Input label="Nombre comercial" value={emp.nombre}
           onChange={e => setEmpresa({ ...emp, nombre: e.target.value })} placeholder="Don Pepe Sabor" />
+        <Input label="Razón social (quien factura)" value={emp.razonSocial || ""}
+          onChange={e => setEmpresa({ ...emp, razonSocial: e.target.value })} placeholder="Inversiones Ayala 1992" />
         <Input label="NIF / CIF" value={emp.nif}
-          onChange={e => setEmpresa({ ...emp, nif: e.target.value })} placeholder="Ej: 12345678Z" />
+          onChange={e => setEmpresa({ ...emp, nif: e.target.value })} placeholder="Ej: B75361477" />
         <Input label="Dirección fiscal" value={emp.direccion}
           onChange={e => setEmpresa({ ...emp, direccion: e.target.value })} placeholder={DIRECCION_LOCAL} />
         <Input label="Teléfono" value={emp.telefono}
           onChange={e => setEmpresa({ ...emp, telefono: e.target.value })} placeholder="604 136 371" />
         <Input label="IVA que llevan los precios dentro (%)" type="number" min="0" step="1" value={emp.iva}
           onChange={e => setEmpresa({ ...emp, iva: e.target.value })} placeholder="10" />
+        {/* El último paso, y el que no se puede dar sin el gestor: tener el CIF
+            no hace válida una factura si el IVA de cada producto está mal. */}
+        <label style={{ display: "flex", alignItems: "flex-start", gap: 8, color: TEXT_MAIN, fontSize: 13, cursor: "pointer", margin: "4px 0 10px", lineHeight: 1.45 }}>
+          <input type="checkbox" checked={!!emp.ivaConfirmado} style={{ marginTop: 3 }}
+            onChange={e => setEmpresa({ ...emp, ivaConfirmado: e.target.checked })} />
+          <span>
+            Mi gestor me ha confirmado el <strong>tipo de IVA</strong> de estos productos
+            y que <strong>no me obliga Verifactu</strong>. Hasta que marques esto, las
+            facturas salen como proforma aunque los datos estén completos.
+          </span>
+        </label>
         <p style={{ margin: 0, fontSize: 12.5, fontWeight: 700, color: empresaLista(emp) ? "#16a34a" : "#bf7d08" }}>
           {empresaLista(emp)
-            ? "Completo: las facturas ya no salen como proforma."
-            : "Incompleto: las facturas saldrán marcadas como proforma."}
+            ? "Listo: las facturas ya no salen como proforma."
+            : emp.ivaConfirmado
+              ? "Faltan datos: las facturas saldrán marcadas como proforma."
+              : "Pendiente del gestor: las facturas saldrán marcadas como proforma."}
         </p>
       </div>
 
@@ -3510,7 +3531,7 @@ export default function AppModerno() {
   const [trabajadoras, setTrabajadoras] = useState(() => cargarLS("trabajadoras", TRABAJADORAS_DEMO));
   const [jornadas, setJornadas] = useState(() => cargarLS("jornadas", []));   // mostrador
   // Datos fiscales de quien vende. Van aparte porque son uno solo, no una lista.
-  const [empresa, setEmpresa] = useState(() => ({ ...EMPRESA_VACIA, ...(cargarLS("empresa", null) || {}) }));
+  const [empresa, setEmpresa] = useState(() => fusionaEmpresa(cargarLS("empresa", null)));
 
   const [listo, setListo] = useState(false);
 
@@ -3565,7 +3586,7 @@ export default function AppModerno() {
       proveedores: setProveedores, compras: setCompras, ingredientes: setIngredientes,
       gastos: setGastos, repartidores: setRepartidores, producciones: setProducciones,
       trabajadoras: setTrabajadoras, jornadas: setJornadas,
-      empresa: (d) => setEmpresa({ ...EMPRESA_VACIA, ...(d || {}) }),
+      empresa: (d) => setEmpresa(fusionaEmpresa(d)),
     };
     const claves = Object.keys(destinos);
     let faltan = claves.length;
@@ -3635,7 +3656,7 @@ export default function AppModerno() {
       entran.forEach(k => { destinos[k](d[k]); sync(k, d[k]); });
       // La empresa no es una lista, así que no entra en el bucle de arriba.
       if (d.empresa && typeof d.empresa === "object" && !Array.isArray(d.empresa)) {
-        const e = { ...EMPRESA_VACIA, ...d.empresa };
+        const e = fusionaEmpresa(d.empresa);
         setEmpresa(e); sync("empresa", e);
       }
       alert("Copia restaurada.");

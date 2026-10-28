@@ -20,15 +20,45 @@ import { fechaLegible, preparacionDe, totalesPedido } from "./pedidos.js";
 
 export const DOCUMENTOS = ["Ticket", "Albarán", "Factura"];
 
-/** Datos de quien VENDE. Se rellenan una vez, en ⚙️ Administración. */
+/**
+ * Datos de quien VENDE. Se pueden cambiar en ⚙️ Administración; aquí están los
+ * que nos pasó la dueña, para no tener que teclearlos.
+ *
+ * `nombre` es el nombre comercial, el que conoce la gente. `razonSocial` es quien
+ * factura de verdad, y es la que manda en el papel.
+ */
 export const EMPRESA_VACIA = {
   nombre: "Don Pepe Sabor",
-  nif: "",
-  direccion: "",
+  razonSocial: "Inversiones Ayala 1992",
+  nif: "B75361477",
+  direccion: "Calle Berrocal 7, local 3, 28021 Madrid",
   telefono: "604 136 371",
   iva: 10,          // % que lleva el precio de venta dentro; lo confirma el gestor
   serie: "A",       // serie de la numeración de facturas
+  /**
+   * Hasta que el gestor confirme el IVA de cada producto y si aplica Verifactu,
+   * toda factura sale marcada como proforma AUNQUE los datos estén completos.
+   * Tener el CIF no basta: una factura con el IVA equivocado es un problema, no
+   * un papel. Se enciende a mano en Administración, y solo con el gestor delante.
+   */
+  ivaConfirmado: false,
 };
+
+/**
+ * Junta lo guardado con los datos de fábrica.
+ *
+ * Un campo guardado EN BLANCO no gana: la app escribió la ficha vacía en la nube
+ * antes de que supiéramos el CIF, y si ese vacío pisara lo de arriba habría que
+ * volver a teclearlo todo. Lo que esté escrito manda; lo que esté en blanco se
+ * rellena con lo de fábrica.
+ */
+export function fusionaEmpresa(guardado) {
+  const e = { ...EMPRESA_VACIA };
+  for (const [k, v] of Object.entries(guardado || {})) {
+    if (typeof v === "string" ? v.trim() !== "" : v != null) e[k] = v;
+  }
+  return e;
+}
 
 /** Datos de quien COMPRA. Van en el pedido y se guardan en la ficha del cliente. */
 export const FISCAL_VACIO = {
@@ -53,7 +83,7 @@ export function faltaParaFacturar(fiscal) {
 
 /** Si no están estos, cualquier factura que se imprima sale como proforma. */
 export const empresaLista = (e) =>
-  Boolean(e?.nombre?.trim() && e?.nif?.trim() && e?.direccion?.trim());
+  Boolean(e?.nombre?.trim() && e?.nif?.trim() && e?.direccion?.trim() && e?.ivaConfirmado);
 
 /**
  * Base e IVA a partir de un total que YA lleva el impuesto dentro.
@@ -75,7 +105,7 @@ export function desglosaIva(total, tipo) {
  * papel— ni el desglose de IVA salvo en la factura.
  */
 export function textoDocumento(pedido, empresa, tipo) {
-  const emp = { ...EMPRESA_VACIA, ...(empresa || {}) };
+  const emp = fusionaEmpresa(empresa);
   const f = { ...FISCAL_VACIO, ...(pedido?.fiscal || {}) };
   const t = totalesPedido(pedido);
   const eur = (n) => `${(Number(n) || 0).toFixed(2)} €`;
@@ -121,7 +151,9 @@ export function textoDocumento(pedido, empresa, tipo) {
   if (tipo === "Albarán") L.push("", "Este documento acredita la entrega. No es una factura.");
   if (tipo === "Factura" && !empresaLista(emp)) L.push("", "DOCUMENTO PROFORMA · SIN VALIDEZ FISCAL");
 
-  L.push("", emp.direccion || "", `WhatsApp ${emp.telefono}`);
+  L.push("", emp.razonSocial && emp.razonSocial !== emp.nombre ? emp.razonSocial : "");
+  if (emp.nif) L.push(`CIF ${emp.nif}`);
+  L.push(emp.direccion || "", `WhatsApp ${emp.telefono}`);
   return L.filter((l, i, a) => !(l === "" && a[i - 1] === "")).join("\n");
 }
 

@@ -63,7 +63,7 @@ export function fechaLegible(iso) {
 }
 
 /** Dirección del obrador, para los pedidos que recoge el cliente. */
-export const DIRECCION_LOCAL = "Calle Berrocal 7, 28021 Madrid";
+export const DIRECCION_LOCAL = "Calle Berrocal 7, local 3, 28021 Madrid";
 
 /** "2026-10-27" → "261027". La fecha metida dentro del número de pedido. */
 export const fechaCompacta = (iso) => String(iso || "").slice(2).replace(/-/g, "");
