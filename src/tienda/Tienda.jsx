@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '../firebase.js'
-import { DIRECCION_LOCAL, estadoProducto, eur, fotoDe, precioDesde, unidades } from './catalogo.js'
+import { DIRECCION_LOCAL, PROXIMAMENTE, estadoProducto, eur, fotoDe, precioDesde, unidades } from './catalogo.js'
 import { totalesDe } from './pedido.js'
 import Ficha from './Ficha.jsx'
 import Carrito from './Carrito.jsx'
@@ -143,6 +143,9 @@ export default function Tienda() {
         {productos && (
           <div className="grid">
             {visibles.map((p) => <Tarjeta key={p.id} p={p} onAbrir={() => setFicha(p)} />)}
+            {/* Lo que viene, al final y en gris. Sin precio porque aún no lo tiene. */}
+            {(filtro === 'Todos' || filtro === 'Otros') &&
+              PROXIMAMENTE.map((p) => <TarjetaProxima key={p.id} p={p} />)}
           </div>
         )}
       </section>
@@ -219,6 +222,30 @@ function Sello({ titulo, pie }) {
   )
 }
 
+/**
+ * Un producto que todavía no se vende: foto en gris, cinta de "Próximamente" y
+ * nada que pulsar. Sin precio ni bandejas, porque aún no los tiene.
+ *
+ * Usa la misma clase `agotado` que los productos sin stock: es el mismo gesto
+ * visual (está ahí, no se puede coger) y así no hay dos grises distintos.
+ */
+function TarjetaProxima({ p }) {
+  return (
+    <article className="card agotado">
+      <div className="card-img">
+        <img src={fotoDe(p)} alt={p.nombre} loading="lazy" />
+        <span className="cinta no">Próximamente</span>
+      </div>
+      <div className="card-body">
+        <div className="card-ref">{p.categoria}</div>
+        <h3 className="card-name">{p.nombre}</h3>
+        <div className="price-row"><span className="price-desde">Muy pronto en Don Pepe Sabor</span></div>
+        <button className="card-add" disabled>Próximamente</button>
+      </div>
+    </article>
+  )
+}
+
 function Tarjeta({ p, onAbrir }) {
   const varias = (p.variantes || []).length > 1
   const estado = estadoProducto(p)
@@ -239,7 +266,7 @@ function Tarjeta({ p, onAbrir }) {
           {(p.variantes || []).map((v) => <span key={v.presentacion} className="size-chip">{unidades(v.presentacion)}</span>)}
         </div>
         <button className="card-add" onClick={onAbrir} disabled={estado.agotado}>
-          {estado.agotado ? 'Agotado' : 'Añadir al pedido'}
+          {estado.proximo ? 'Próximamente' : estado.agotado ? 'Agotado' : 'Añadir al pedido'}
         </button>
       </div>
     </article>

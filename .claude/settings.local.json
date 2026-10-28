@@ -12,7 +12,12 @@
       "Bash(python -c ' *)",
       "Bash(xxd)",
       "Bash(PYTHONIOENCODING=utf-8 python -c ' *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(python -c \"import PIL; from PIL import Image; print\\('Pillow', PIL.__version__\\)\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code} %{size_download} %{content_type}\\\\n\" http://localhost:5188/productos/pan-de-jamon.webp)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code} %{size_download}\\\\n\" http://localhost:5188/productos/empanadita-carne.webp)"
     ]
   },
   "hooks": {

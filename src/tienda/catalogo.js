@@ -62,6 +62,23 @@ export const PREFIJOS = [
 ]
 
 /**
+ * Lo que viene, para ir abriendo boca.
+ *
+ * Estos productos NO están en Inventario: todavía no se venden, no tienen precio
+ * ni stock, y meterlos en la gestión sería ensuciarla con algo que no se puede
+ * pedir. Viven aquí, se enseñan en gris al final del catálogo y no se pueden
+ * añadir al carrito.
+ *
+ * TEMPORAL, a propósito: el día que salgan a la venta se crean como productos
+ * normales en Inventario y esta lista se vacía. Si esta lista está vacía, la
+ * tienda no enseña nada de esto y no hay que tocar nada más.
+ */
+export const PROXIMAMENTE = [
+  { id: 'prox-pan-de-jamon', nombre: 'Pan de Jamón', categoria: 'Otros', foto: 'pan-de-jamon' },
+  { id: 'prox-golfeados',    nombre: 'Golfeados',    categoria: 'Otros', foto: 'golfeados' },
+]
+
+/**
  * Familias que SIEMPRE se hacen por encargo, con su antelación mínima en horas.
  *
  * Los tequeños se congelan y hay existencias; las empanadas, los pastelitos y los
@@ -91,6 +108,10 @@ const textoEncargo = (horas) =>
  */
 export function estadoDe(variante, producto) {
   const etiqueta = variante?.etiqueta || ''
+  // "Próximamente" es un producto que aún no se vende: se enseña para que la
+  // gente lo vaya viendo, pero no se puede pedir. Se pinta igual que agotado
+  // (en gris) porque es el mismo gesto: está ahí y no se puede coger.
+  if (etiqueta === 'proximamente') return { agotada: true, proxima: true, horas: 0, texto: 'Próximamente' }
   if (etiqueta === 'agotado') return { agotada: true, horas: 0, texto: 'Agotada' }
   const porEtiqueta = etiqueta === '24h' ? 24 : etiqueta === '48h' ? 48 : 0
   const horas = Math.max(porEtiqueta, horasDeFamilia(producto))
@@ -101,7 +122,11 @@ export function estadoDe(variante, producto) {
 export function estadoProducto(p) {
   const estados = (p.variantes || []).map((v) => estadoDe(v, p))
   const aLaVenta = estados.filter((e) => !e.agotada)
-  if (!aLaVenta.length) return { agotado: true, texto: 'Agotado' }
+  if (!aLaVenta.length) {
+    // Si todas sus bandejas son "próximamente", el producto entero lo es.
+    const proxima = estados.length > 0 && estados.every((e) => e.proxima)
+    return { agotado: true, proximo: proxima, texto: proxima ? 'Próximamente' : 'Agotado' }
+  }
   const horas = Math.min(...aLaVenta.map((e) => e.horas))
   return { agotado: false, texto: textoEncargo(horas) }
 }
@@ -145,6 +170,7 @@ const FOTO_POR_NOMBRE = [
 ]
 
 export function fotoDe(p) {
+  if (p.foto) return `/productos/${p.foto}.webp`
   const porNombre = FOTO_POR_NOMBRE.find(([re]) => re.test(p.nombre || ''))?.[1]
   const nombre = FOTOS[p.id] || porNombre || FOTO_CATEGORIA[p.categoria] || 'tequeno-tradicional'
   return `/productos/${nombre}.webp`
