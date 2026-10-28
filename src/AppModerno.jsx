@@ -7,7 +7,7 @@ import {
   faltaParaFacturar, mesLegible, pideFiscal, textoDocumento,
 } from "./documentos.js";
 import { cuentasJornada, disponibles } from "./mostrador.js";
-import { FRANJAS, TOPE_POR_FRANJA, ocupacion, sinReparto, textoFranja } from "./franjas.js";
+import { ocupacion, sinReparto, textoFranja, turnosDe } from "./franjas.js";
 // Las fotos y el recargo por freír son los mismos que ve el cliente en la tienda:
 // si se tocan allí, el pedido hecho a mano sigue cuadrando con la web.
 import { costoFrito, fotoDe } from "./tienda/catalogo.js";
@@ -625,34 +625,40 @@ function FormularioPedido({ productos, clientes, repartidores, pedidos, onGuarda
         </p>
       )}
 
-      {/* Las mismas franjas que ve el cliente, con los huecos que quedan.
-          Aquí NO se bloquean: si el dueño quiere doblar una franja, manda él. */}
+      {/* Los mismos turnos que ve el cliente, con los huecos que quedan. Aquí NO
+          se bloquean: si el dueño quiere doblar un turno, manda él.
+
+          Cambian según el día de la semana, así que la lista se rehace cada vez
+          que se toca la fecha: el viernes la tarde es de 15 a 18 y el sábado hay
+          un turno solo. */}
       <div style={{ marginBottom: 12 }}>
-        <label style={{ display: "block", color: TEXT_SUB, fontSize: 12, marginBottom: 6, fontWeight: 600 }}>Franja de entrega</label>
+        <label style={{ display: "block", color: TEXT_SUB, fontSize: 12, marginBottom: 6, fontWeight: 600 }}>Turno de entrega</label>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(118px, 1fr))", gap: 6 }}>
           <button type="button" onClick={() => set("rangoHorario", "")}
             style={{ ...estiloFranja(!form.rangoHorario), gridColumn: "1 / -1" }}>
             Cualquier hora
           </button>
-          {FRANJAS.map(f => {
+          {turnosDe(form.fecha).map(f => {
             const texto = textoFranja(f);
             const ocupados = (agendaForm[form.fecha] || {})[f.id] || 0;
-            const libres = TOPE_POR_FRANJA - ocupados;
+            const libres = f.tope - ocupados;
             const elegida = form.rangoHorario === texto;
             return (
               <button key={f.id} type="button" onClick={() => set("rangoHorario", texto)}
                 style={estiloFranja(elegida)}>
                 {f.etiqueta}
                 <span style={{ display: "block", fontSize: 10.5, fontWeight: 700, marginTop: 2, color: elegida ? "#ffffffcc" : (libres > 0 ? TEXT_TENUE : "#bf7d08") }}>
-                  {libres > 0 ? `${libres} libre${libres === 1 ? "" : "s"}` : `Completa · ${ocupados}`}
+                  {libres > 0 ? `${libres} libre${libres === 1 ? "" : "s"}` : `Completo · ${ocupados}`}
                 </span>
               </button>
             );
           })}
         </div>
-        {form.rangoHorario && !FRANJAS.some(f => textoFranja(f) === form.rangoHorario) && (
+        {/* Los pedidos de antes del cambio traen tramos de dos horas, y hay que
+            poder verlos y respetarlos: es lo que se le prometió al cliente. */}
+        {form.rangoHorario && !turnosDe(form.fecha).some(f => textoFranja(f) === form.rangoHorario) && (
           <p style={{ color: TEXT_SUB, fontSize: 12, margin: "7px 0 0" }}>
-            Horario escrito a mano: <strong style={{ color: TEXT_MAIN }}>{form.rangoHorario}</strong>
+            Horario que no es de los turnos de ese día: <strong style={{ color: TEXT_MAIN }}>{form.rangoHorario}</strong>
           </p>
         )}
       </div>
@@ -1311,7 +1317,9 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
    * lo que evita que se vuelva a colar dos veces.
    */
   const aceptarWeb = (w) => {
-    const { _id, creado, km, codigo, ...datos } = w;
+    // `km`, `lat` y `lon` se quedan: son los que luego ordenan la ruta del
+    // reparto. Antes se descartaban aquí y el repartidor salía a ciegas.
+    const { _id, creado, codigo, ...datos } = w;
     guardar({
       ...datos,
       id: generarId(),

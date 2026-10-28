@@ -11,8 +11,8 @@
  * eso: se deja pedir con la tarifa base y se avisa de que está sin comprobar).
  */
 
-const ORIGEN_LAT = 40.3381
-const ORIGEN_LON = -3.6752 // Calle Berrocal, 28021 Madrid (Butarque, Villaverde). Es el punto de la calle,
+export const ORIGEN_LAT = 40.3381
+export const ORIGEN_LON = -3.6752 // Calle Berrocal, 28021 Madrid (Butarque, Villaverde). Es el punto de la calle,
 // no el portal: ningun buscador tiene numeros aqui, y la calle entera mide 300 m.
 
 export const TARIFA_BASE = 6
@@ -97,16 +97,17 @@ async function kmHasta(lat, lon) {
 }
 
 /**
- * Devuelve siempre un objeto con `estado`:
- * - 'ok':          dirección encontrada, con km y tarifa.
- * - 'no':          no se ha podido situar en el mapa. AVISA, pero NO bloquea.
- * - 'sin-revisar': no se pudo preguntar (sin red o servicio caído); se deja pedir.
+ * Dónde cae una dirección en el mapa: `{ lat, lon }`, o null si no se sitúa.
  *
- * Ninguno de los tres impide pedir. Antes 'no' dejaba el botón muerto y había
- * clientes que no podían comprar; perder un pedido es peor que llevar una
- * dirección por confirmar, que se arregla con un mensaje de WhatsApp.
+ * Está suelta de `calcularEnvio` porque la usa también la app del repartidor
+ * para ordenar la ruta del día, y ahí los km desde la tienda no sirven de nada:
+ * lo que hace falta es el punto, para medir de un portal al siguiente.
+ *
+ * `estado` distingue "no existe" de "no se pudo preguntar", que es una
+ * diferencia que importa en los dos sitios: lo primero se avisa, lo segundo se
+ * reintenta luego.
  */
-export async function calcularEnvio(direccion, cp) {
+export async function situar(direccion, cp) {
   let alguienRespondio = false
   let candidatos = []
 
@@ -122,16 +123,37 @@ export async function calcularEnvio(direccion, cp) {
     } catch { /* ninguno de los dos contestó */ }
   }
 
-  if (!alguienRespondio) return { estado: 'sin-revisar', tarifa: TARIFA_BASE }
+  if (!alguienRespondio) return { estado: 'sin-revisar', sitio: null }
 
   const sitio = elegir(candidatos, cp)
-  if (!sitio) return { estado: 'no', tarifa: TARIFA_BASE }
+  return { estado: sitio ? 'ok' : 'no', sitio }
+}
 
+/**
+ * Devuelve siempre un objeto con `estado`:
+ * - 'ok':          dirección encontrada, con km, tarifa y coordenadas.
+ * - 'no':          no se ha podido situar en el mapa. AVISA, pero NO bloquea.
+ * - 'sin-revisar': no se pudo preguntar (sin red o servicio caído); se deja pedir.
+ *
+ * Ninguno de los tres impide pedir. Antes 'no' dejaba el botón muerto y había
+ * clientes que no podían comprar; perder un pedido es peor que llevar una
+ * dirección por confirmar, que se arregla con un mensaje de WhatsApp.
+ *
+ * Las coordenadas se devuelven SIEMPRE que se haya encontrado el portal, aunque
+ * falle el cálculo de los kilómetros: el repartidor las necesita para ordenar la
+ * ruta, y una cosa no tiene que ver con la otra. Antes se calculaban y se
+ * tiraban, y luego había que volver a preguntarlas una por una.
+ */
+export async function calcularEnvio(direccion, cp) {
+  const { estado, sitio } = await situar(direccion, cp)
+  if (!sitio) return { estado, tarifa: TARIFA_BASE }
+
+  const punto = { lat: sitio.lat, lon: sitio.lon }
   try {
     const km = await kmHasta(sitio.lat, sitio.lon)
-    if (km == null) return { estado: 'sin-revisar', tarifa: TARIFA_BASE }
-    return { estado: 'ok', km: Math.round(km * 10) / 10, tarifa: tarifaPorKm(km) }
+    if (km == null) return { estado: 'sin-revisar', tarifa: TARIFA_BASE, ...punto }
+    return { estado: 'ok', km: Math.round(km * 10) / 10, tarifa: tarifaPorKm(km), ...punto }
   } catch {
-    return { estado: 'sin-revisar', tarifa: TARIFA_BASE }
+    return { estado: 'sin-revisar', tarifa: TARIFA_BASE, ...punto }
   }
 }

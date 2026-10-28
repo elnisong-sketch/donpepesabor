@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getDoc, doc } from 'firebase/firestore'
 import { db } from '../firebase.js'
-import { FRANJAS, SIN_PREFERENCIA, huecosEn, sinReparto, textoFranja } from '../franjas.js'
+import { SIN_PREFERENCIA, huecosEn, sinReparto, textoFranja, turnosDe } from '../franjas.js'
 import { DIRECCION_LOCAL, PAGOS, PREFIJOS, etiquetaPrep, eur, unidades } from './catalogo.js'
 import { TARIFA_BASE, TEXTO_TARIFAS, calcularEnvio } from './envio.js'
 import {
@@ -90,6 +90,19 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
     if (datos.fechaEntrega < minFecha) setDatos((d) => ({ ...d, fechaEntrega: minFecha }))
   }, [minFecha, datos.fechaEntrega])
 
+  /**
+   * Los turnos cambian según el día: el viernes la tarde es de 15 a 18 y el
+   * sábado hay uno solo. Si el cliente elige la tarde del jueves y luego se
+   * cambia al viernes, ese turno ya no existe y hay que soltarlo, o se enviaría
+   * un pedido con una hora que la tienda no da.
+   */
+  const turnos = turnosDe(datos.fechaEntrega)
+  useEffect(() => {
+    if (datos.franja && !turnosDe(datos.fechaEntrega).some((t) => t.id === datos.franja)) {
+      setDatos((d) => ({ ...d, franja: '' }))
+    }
+  }, [datos.fechaEntrega, datos.franja])
+
   const envio = domicilio ? (distancia?.tarifa ?? TARIFA_BASE) : 0
   const t = totalesDe(carrito, envio)
   const bandejas = carrito.reduce((s, l) => s + l.cantidad, 0)
@@ -99,7 +112,10 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
     if (!datos.fechaEntrega) return 'Elige el día de entrega'
     if (datos.fechaEntrega < minFecha) return `${encargo} necesita 48 h: elige el ${fechaLegible(minFecha)} o un día posterior`
     if (domicilio && sinReparto(datos.fechaEntrega)) return 'Los domingos no repartimos: elige otro día o pásate a recogerlo'
-    if (datos.franja && domicilio && huecosEn(agenda, datos.fechaEntrega, datos.franja) <= 0) return 'Esa franja se acaba de llenar: elige otra'
+    // Ya no hay "me da igual la hora": o mañana o tarde. Un pedido sin turno no
+    // ocupaba hueco en la agenda y acababa descuadrándola.
+    if (turnos.length && !datos.franja) return 'Elige si lo quieres por la mañana o por la tarde'
+    if (datos.franja && domicilio && huecosEn(agenda, datos.fechaEntrega, datos.franja) <= 0) return 'Ese turno se acaba de llenar: elige el otro'
     if (!datos.nombre.trim()) return 'Escribe tu nombre'
     if (!tel) return 'Escribe tu teléfono'
     if (!telOk) return 'Revisa el teléfono: faltan o sobran números'
@@ -224,34 +240,29 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
                   </div>
                 )}
 
-                <div className="field">
-                  <label>¿A qué hora te viene bien?</label>
-                  <div className="franjas">
-                    <button type="button"
-                      className={`franja-pick libre${!datos.franja ? ' on' : ''}`}
-                      onClick={() => poner('franja', '')}>
-                      <b>Me da igual la hora</b>
-                      <small>Te avisamos antes de salir</small>
-                    </button>
-
-                    {FRANJAS.map((f) => {
-                      const huecos = huecosEn(agenda, datos.fechaEntrega, f.id)
-                      const llena = domicilio && huecos <= 0
-                      return (
-                        <button key={f.id} type="button" disabled={llena}
-                          className={`franja-pick${datos.franja === f.id ? ' on' : ''}${llena ? ' llena' : ''}`}
-                          onClick={() => poner('franja', f.id)}>
-                          <b>{f.etiqueta}</b>
-                          {llena && <small>Completa</small>}
-                        </button>
-                      )
-                    })}
+                {turnos.length > 0 && (
+                  <div className="field">
+                    <label>¿Mañana o tarde?</label>
+                    <div className="franjas">
+                      {turnos.map((f) => {
+                        const huecos = huecosEn(agenda, datos.fechaEntrega, f.id)
+                        const llena = domicilio && huecos <= 0
+                        return (
+                          <button key={f.id} type="button" disabled={llena}
+                            className={`franja-pick${datos.franja === f.id ? ' on' : ''}${llena ? ' llena' : ''}`}
+                            onClick={() => poner('franja', f.id)}>
+                            <b>{f.nombre}</b>
+                            <small>{llena ? 'Completo' : `${f.desde} – ${f.hasta}`}</small>
+                          </button>
+                        )
+                      })}
+                    </div>
+                    <span className="hint">
+                      Llegamos en algún momento dentro de ese turno, no a una hora
+                      exacta. Te avisamos antes de salir.
+                    </span>
                   </div>
-                  <span className="hint">
-                    La franja es <strong>orientativa</strong>: llegamos en algún momento dentro de
-                    esas dos horas, no a una hora exacta.
-                  </span>
-                </div>
+                )}
               </div>
 
               <div className="form-sec">

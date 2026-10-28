@@ -1,53 +1,94 @@
 /**
  * Franjas de entrega, compartidas por la tienda y la gestión.
  *
- * El cliente ya no escribe dos horas sueltas: elige una franja de 2 horas, o
- * dice que le da igual. Con horas libres no había forma de saber si quedaba
- * hueco ("de 14:05 a 15:40" solapa a medias con "de 14:00 a 16:00"); con
- * franjas fijas, o queda sitio o no queda.
+ * Ya no son tramos de dos horas: son el TURNO de mañana o el de tarde, y
+ * cambian según el día de la semana. El cambio lo pidió el dueño con estas
+ * palabras: "el tema de colocar hora está siendo bastante complicado para
+ * cumplirle a los clientes". Una franja de dos horas obliga a clavar la hora en
+ * una ciudad con tráfico; un turno de tres o cuatro horas sí se cumple.
  *
- * La franja es ORIENTATIVA: se entrega en algún momento dentro de esas dos
- * horas, no a una hora exacta. Eso hay que decírselo al cliente, y por eso
- * está escrito aquí al lado del cálculo.
+ * El cliente elige mañana o tarde, y nada más: no hay horas a mano ni un "me da
+ * igual" que no ocupaba hueco en ninguna franja y descuadraba la agenda.
+ *
+ * EL HORARIO, que es lo único que hay que tocar si vuelve a cambiar:
+ *   lunes a jueves   mañana 10–13 · tarde 16–20
+ *   viernes          mañana 10–13 · tarde 15–18
+ *   sábado           todo el día 10–18
+ *   domingo          cerrado
  */
 
-export const HORA_INICIO = 10;        // primera entrega del día
-export const HORA_FIN = 22;           // última
-export const HORAS_POR_FRANJA = 2;
-export const TOPE_POR_FRANJA = 3;     // repartos que caben en cada franja
-export const DIAS_SIN_REPARTO = [0];  // 0 = domingo
+export const HORA_INICIO = 10;   // primera entrega del día
+export const HORA_FIN = 20;      // última
 
 const dosCifras = (n) => String(n).padStart(2, "0");
 
-/** Las franjas del día, de la primera a la última. */
-export const FRANJAS = Array.from(
-  { length: Math.floor((HORA_FIN - HORA_INICIO) / HORAS_POR_FRANJA) },
-  (_, i) => {
-    const desde = HORA_INICIO + i * HORAS_POR_FRANJA;
-    const hasta = desde + HORAS_POR_FRANJA;
-    return {
-      id: `${dosCifras(desde)}-${dosCifras(hasta)}`,
-      desde: `${dosCifras(desde)}:00`,
-      hasta: `${dosCifras(hasta)}:00`,
-      etiqueta: `${dosCifras(desde)}:00 – ${dosCifras(hasta)}:00`,
-      inicio: desde * 60,
-      fin: hasta * 60,
-    };
-  }
-);
+/**
+ * Un turno. `tope` son los repartos que caben dentro, y es el número que hay
+ * que subir o bajar cuando la agenda se queda corta o se queda larga: sale de
+ * contar uno y medio por hora, que es el ritmo real con el que se venía
+ * trabajando (tres repartos por cada dos horas).
+ */
+const turno = (id, nombre, desde, hasta, tope) => ({
+  id,
+  nombre,
+  desde: `${dosCifras(desde)}:00`,
+  hasta: `${dosCifras(hasta)}:00`,
+  etiqueta: `${nombre} · ${dosCifras(desde)}:00 – ${dosCifras(hasta)}:00`,
+  inicio: desde * 60,
+  fin: hasta * 60,
+  tope,
+});
 
-/** Lo que se guarda en el pedido cuando el cliente no elige hora. */
-export const SIN_PREFERENCIA = "Cualquier hora";
+export const MANANA        = turno("manana", "Mañana", 10, 13, 5);
+export const TARDE         = turno("tarde", "Tarde", 16, 20, 6);
+export const TARDE_VIERNES = turno("tarde-v", "Tarde", 15, 18, 5);
+export const SABADO        = turno("sabado", "Todo el día", 10, 18, 12);
 
+/** Los turnos de cada día de la semana, con domingo vacío (0 = domingo). */
+const SEMANA = {
+  0: [],
+  1: [MANANA, TARDE],
+  2: [MANANA, TARDE],
+  3: [MANANA, TARDE],
+  4: [MANANA, TARDE],
+  5: [MANANA, TARDE_VIERNES],
+  6: [SABADO],
+};
+
+/** Todos los turnos que existen, para buscar uno por su id sin saber el día. */
+export const TODOS_LOS_TURNOS = [MANANA, TARDE, TARDE_VIERNES, SABADO];
+
+/** El día de la semana de "2026-10-28", o null si la fecha no se entiende. */
+function diaSemana(iso) {
+  const [a, m, d] = String(iso || "").split("-").map(Number);
+  if (!a || !m || !d) return null;
+  return new Date(a, m - 1, d).getDay();
+}
+
+/**
+ * Los turnos que se pueden elegir un día concreto. Vacío el domingo, y vacío
+ * también si no hay fecha todavía: así la tienda no ofrece horas antes de que
+ * el cliente diga qué día quiere.
+ */
+export function turnosDe(iso) {
+  const d = diaSemana(iso);
+  return d === null ? [] : SEMANA[d];
+}
+
+/** Ese día no se reparte (hoy, solo el domingo). */
+export const sinReparto = (iso) => turnosDe(iso).length === 0;
+
+/** El texto que se guarda en el pedido: "10:00 a 13:00". */
 export const textoFranja = (f) => `${f.desde} a ${f.hasta}`;
 
-/** "2026-10-26" → true si es domingo (o cualquier día marcado sin reparto). */
-export function sinReparto(iso) {
-  if (!iso) return false;
-  const [a, m, d] = String(iso).split("-").map(Number);
-  if (!a || !m || !d) return false;
-  return DIAS_SIN_REPARTO.includes(new Date(a, m - 1, d).getDay());
-}
+/**
+ * Lo que se guarda cuando el pedido no lleva turno.
+ *
+ * La tienda ya no lo ofrece —ahí hay que elegir mañana o tarde— pero la gestión
+ * sí: el dueño puede apuntar un pedido sin hora, y los pedidos viejos la traen
+ * así. Un pedido sin turno no ocupa hueco en la agenda.
+ */
+export const SIN_PREFERENCIA = "Cualquier hora";
 
 /** "17:30" → 1050 minutos. Devuelve null si no se entiende. */
 function minutos(hhmm) {
@@ -56,23 +97,27 @@ function minutos(hhmm) {
 }
 
 /**
- * Las franjas que ocupa un pedido, a partir de su `rangoHorario`.
+ * Los turnos que ocupa un pedido de un día, a partir de su `rangoHorario`.
  *
- * Los pedidos antiguos traen horas a mano ("17:00 a 19:00") y los de la
- * gestión pueden traer cualquier cosa; todo lo que se solape con una franja
- * cuenta como ocupado en ella. Sin hora, no ocupa ninguna: justamente por eso
- * "cualquier hora" nunca se llena.
+ * Hay que pasar la fecha porque los turnos ya no son los mismos todos los días:
+ * las 16:00 de un jueves caen en la tarde de 16 a 20, y las de un viernes no
+ * caen en ninguna (ese día la tarde acaba a las 18 y empieza a las 15).
+ *
+ * Los pedidos antiguos traen tramos de dos horas ("17:00 a 19:00") y los de la
+ * gestión pueden traer cualquier cosa; todo lo que se solape con un turno
+ * cuenta como ocupado en él. Sin hora no ocupa nada, y por eso un pedido
+ * "Cualquier hora" nunca llena la agenda.
  */
-export function franjasDe(rangoHorario) {
+export function franjasOcupadas(iso, rangoHorario) {
   const partes = String(rangoHorario || "").split(/\s+a\s+/i);
   const ini = minutos(partes[0]);
   const fin = minutos(partes[1]);
   if (ini === null || fin === null || fin <= ini) return [];
-  return FRANJAS.filter(f => ini < f.fin && fin > f.inicio).map(f => f.id);
+  return turnosDe(iso).filter(t => ini < t.fin && fin > t.inicio).map(t => t.id);
 }
 
 /**
- * Cuántos repartos hay apuntados en cada franja de cada día.
+ * Cuántos repartos hay apuntados en cada turno de cada día.
  *
  * Solo cuentan los pedidos A DOMICILIO: una recogida no ocupa al repartidor,
  * el cliente se adapta. Los cancelados tampoco cuentan.
@@ -82,7 +127,7 @@ export function ocupacion(pedidos = []) {
   for (const p of pedidos) {
     if (!p?.fecha || p.estado === "Cancelado") continue;
     if (p.tipoEntrega === "Recogida") continue;
-    for (const id of franjasDe(p.rangoHorario)) {
+    for (const id of franjasOcupadas(p.fecha, p.rangoHorario)) {
       agenda[p.fecha] = agenda[p.fecha] || {};
       agenda[p.fecha][id] = (agenda[p.fecha][id] || 0) + 1;
     }
@@ -90,6 +135,10 @@ export function ocupacion(pedidos = []) {
   return agenda;
 }
 
-/** Huecos que quedan en una franja, según la agenda publicada. */
-export const huecosEn = (agenda, fecha, franjaId) =>
-  Math.max(0, TOPE_POR_FRANJA - ((agenda?.[fecha] || {})[franjaId] || 0));
+/** Los repartos que caben en un turno; 0 si ese turno no existe ese día. */
+export const topeDe = (iso, turnoId) =>
+  turnosDe(iso).find(t => t.id === turnoId)?.tope ?? 0;
+
+/** Huecos que quedan en un turno, según la agenda publicada. */
+export const huecosEn = (agenda, fecha, turnoId) =>
+  Math.max(0, topeDe(fecha, turnoId) - ((agenda?.[fecha] || {})[turnoId] || 0));

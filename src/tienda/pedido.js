@@ -8,7 +8,7 @@
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore'
 import { db } from '../firebase.js'
 import { fechaLegible, whatsappDe } from '../pedidos.js'
-import { FRANJAS, SIN_PREFERENCIA, textoFranja } from '../franjas.js'
+import { SIN_PREFERENCIA, textoFranja, turnosDe } from '../franjas.js'
 import { DIRECCION_LOCAL, SHEETS_URL, WHATSAPP, costoFrito, etiquetaPrep, eur } from './catalogo.js'
 
 // Viven en ../pedidos.js porque la gestión también las necesita; se reexportan
@@ -16,13 +16,16 @@ import { DIRECCION_LOCAL, SHEETS_URL, WHATSAPP, costoFrito, etiquetaPrep, eur } 
 export { fechaLegible, whatsappDe }
 
 /**
- * La hora del pedido, tal como se guarda y se enseña.
+ * La hora del pedido, tal como se guarda y se enseña: "10:00 a 13:00".
  *
- * Sin franja elegida se guarda "Cualquier hora", que es información útil: son
- * los pedidos que se pueden encajar donde sobre hueco.
+ * Hace falta el día de entrega porque los turnos cambian según el día de la
+ * semana: el mismo id "tarde-v" solo existe los viernes.
+ *
+ * Sin turno elegido se guarda "Cualquier hora". En la tienda eso ya no pasa
+ * —hay que elegir mañana o tarde— pero un pedido metido a mano sí puede ir así.
  */
 export function horarioDe(d) {
-  const f = FRANJAS.find((x) => x.id === d.franja)
+  const f = turnosDe(d.fechaEntrega).find((x) => x.id === d.franja)
   return f ? textoFranja(f) : SIN_PREFERENCIA
 }
 
@@ -168,6 +171,10 @@ export function paraGestion(d, items, envio, distancia) {
     rangoHorario: horarioDe(d),
     nota: d.nota?.trim() || '',
     km: distancia?.km ?? null,
+    // El portal en el mapa. Lo usa la app del repartidor para ordenar la ruta
+    // del día sin tener que volver a buscar cada dirección una por una.
+    lat: distancia?.lat ?? null,
+    lon: distancia?.lon ?? null,
     direccionComprobada: distancia?.estado === 'ok',
     envio: t.envio,
     servicio: t.fritura,
