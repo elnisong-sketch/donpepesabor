@@ -119,6 +119,7 @@ function Login({ subtitulo }) {
 function BotonSalir() {
   return (
     <button
+      className="boton-salir"
       onClick={() => signOut(auth)}
       title="Cerrar sesión"
       style={{ position: "fixed", bottom: 12, right: 12, zIndex: 9999, background: "#fff", border: "1px solid #efe1c8", borderRadius: 50, color: "#6f5a4a", padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: "0 2px 10px rgba(42,18,0,.12)" }}

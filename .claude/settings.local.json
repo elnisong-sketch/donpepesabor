@@ -2,6 +2,19 @@
   "env": {
     "ENABLE_TOOL_SEARCH": "true"
   },
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(npx -y firebase-tools deploy --only hosting)",
+      "Bash(node --input-type=module -e ' *)",
+      "Bash(npx oxlint *)",
+      "Bash(curl -s \"https://firestore.googleapis.com/v1/projects/elnisong-413c2/databases/\\(default\\)/documents/datos/productos\")",
+      "Bash(python -c ' *)",
+      "Bash(xxd)",
+      "Bash(PYTHONIOENCODING=utf-8 python -c ' *)",
+      "Bash(git add *)"
+    ]
+  },
   "hooks": {
     "SessionStart": [
       {

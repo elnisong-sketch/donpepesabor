@@ -72,3 +72,36 @@ input, select, textarea {
     padding-bottom: 24px;
   }
 }
+
+/* Con una ficha abierta, el botón flotante de Salir se le montaba encima a
+   "Imprimir" en el móvil. Mientras haya un modal, desaparece: no hay nada que
+   hacer ahí, y cerrar la sesión sin querer en ese momento sería lo peor. */
+body[data-modal] .boton-salir { display: none; }
+
+/* Pie de los documentos (ticket, albarán, factura).
+   En el móvil los botones iban amontonándose unos sobre otros: aquí se apilan
+   a lo ancho, con "Imprimir" el último y bien separado. */
+.pie-documento {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+.pie-documento > * { flex: 0 0 auto; }
+
+.envio-opciones {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  width: 100%;
+  margin-top: 14px;
+}
+.envio-opciones > button { width: 100%; }
+
+@media (max-width: 519px) {
+  .pie-documento { justify-content: stretch; }
+  .pie-documento > * { flex: 1 1 calc(50% - 4px); }
+  .pie-documento > * button,
+  .pie-documento > button { width: 100%; }
+}

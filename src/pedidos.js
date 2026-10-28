@@ -63,7 +63,30 @@ export function fechaLegible(iso) {
 }
 
 /** Dirección del obrador, para los pedidos que recoge el cliente. */
-export const DIRECCION_LOCAL = "Calle Berrocal 56, 28021 Madrid";
+export const DIRECCION_LOCAL = "Calle Berrocal 7, 28021 Madrid";
+
+/** "2026-10-27" → "261027". La fecha metida dentro del número de pedido. */
+export const fechaCompacta = (iso) => String(iso || "").slice(2).replace(/-/g, "");
+
+/**
+ * Número definitivo del pedido: P + día de ENTREGA + el correlativo de ese día.
+ * P261027-03 es el tercer pedido que se entrega el 27.
+ *
+ * El correlativo se saca de los códigos que ya existen, no de cuántos pedidos
+ * hay: si se borra un pedido, el siguiente no repite un número ya impreso ni
+ * pisa el ticket que el cliente tiene en la mano. Al cambiar la fecha de entrega
+ * de un pedido su número NO se recalcula, a propósito: el papel ya está impreso.
+ */
+export function siguienteCodigo(fecha, pedidos = []) {
+  const prefijo = `P${fechaCompacta(fecha)}-`;
+  const usados = (pedidos || [])
+    .map((p) => String(p?.codigo || ""))
+    .filter((c) => c.startsWith(prefijo))
+    .map((c) => parseInt(c.slice(prefijo.length), 10))
+    .filter((n) => Number.isFinite(n));
+  const siguiente = (usados.length ? Math.max(...usados) : 0) + 1;
+  return `${prefijo}${String(siguiente).padStart(2, "0")}`;
+}
 
 /** Mensaje de confirmación que se le manda al cliente cuando se acepta su pedido. */
 export function mensajeConfirmacion(pedido) {

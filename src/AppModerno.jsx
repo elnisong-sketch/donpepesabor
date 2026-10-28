@@ -1,7 +1,11 @@
 import { useState, useEffect, useMemo } from "react";
 import { auth, db } from "./firebase";
 import { collection, deleteDoc, doc, onSnapshot, setDoc } from "firebase/firestore";
-import { bandejasFritas, enlaceConfirmacion, fechaLegible, preparacionDe, quienEntrega, totalesPedido } from "./pedidos.js";
+import { DIRECCION_LOCAL, bandejasFritas, enlaceConfirmacion, fechaLegible, preparacionDe, quienEntrega, siguienteCodigo, totalesPedido, whatsappDe } from "./pedidos.js";
+import {
+  DOCUMENTOS, EMPRESA_VACIA, FISCAL_VACIO, desglosaIva, empresaLista,
+  faltaParaFacturar, mesLegible, pideFiscal, textoDocumento,
+} from "./documentos.js";
 import { cuentasJornada, disponibles } from "./mostrador.js";
 import { FRANJAS, TOPE_POR_FRANJA, ocupacion, sinReparto, textoFranja } from "./franjas.js";
 // Las fotos y el recargo por freír son los mismos que ve el cliente en la tienda:
@@ -193,10 +197,11 @@ const Badge = ({ estado }) => (
   }}>{estado}</span>
 );
 
-const Btn = ({ children, onClick, variant = "primary", small, accent, style = {} }) => {
+const Btn = ({ children, onClick, variant = "primary", small, accent, disabled, style = {} }) => {
   const base = {
-    border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 700,
+    border: "none", borderRadius: 10, cursor: disabled ? "not-allowed" : "pointer", fontWeight: 700,
     padding: small ? "7px 14px" : "11px 20px", fontSize: small ? 13 : 15,
+    opacity: disabled ? .45 : 1,
     transition: "transform .12s, box-shadow .12s", ...style
   };
   const ac = accent || VINO;
@@ -208,10 +213,10 @@ const Btn = ({ children, onClick, variant = "primary", small, accent, style = {}
     ghost: { background: "transparent", color: ac, border: `1px solid ${ac}88` },
   };
   return (
-    <button
-      onMouseDown={e => e.currentTarget.style.transform = "scale(0.97)"}
+    <button disabled={disabled}
+      onMouseDown={e => { if (!disabled) e.currentTarget.style.transform = "scale(0.97)"; }}
       onMouseUp={e => e.currentTarget.style.transform = "scale(1)"}
-      style={{ ...base, ...variants[variant] }} onClick={onClick}>{children}</button>
+      style={{ ...base, ...variants[variant] }} onClick={disabled ? undefined : onClick}>{children}</button>
   );
 };
 
@@ -271,17 +276,41 @@ const Card = ({ children, accent, style = {} }) => (
   }}>{children}</div>
 );
 
-const Modal = ({ title, accent = VINO, onClose, children }) => (
-  <div className="modal-overlay">
-    <div className="modal-box" style={{ background: BG_CARD, border: `1px solid ${BORDER}`, boxShadow: "0 20px 60px #0003" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <h2 style={{ color: MARRON, margin: 0, fontSize: 19, fontFamily: TIPO_TIT, fontWeight: 800 }}>{title}</h2>
-        <button onClick={onClose} style={{ background: BG_APP, border: `1px solid ${BORDER}`, color: TEXT_SUB, fontSize: 16, cursor: "pointer", borderRadius: 8, width: 32, height: 32 }}>✕</button>
+/**
+ * Mientras haya un modal abierto, el `<body>` lleva la marca `data-modal`.
+ *
+ * El botón flotante de Salir vive fuera de esta app (main.jsx) y se le pegaba
+ * encima a "Imprimir" en el móvil. En vez de moverlo de sitio, se esconde: con
+ * una ficha abierta no hay nada que hacer ahí, y además cerrar la sesión por
+ * error en ese momento sería lo peor que podría pasar. Se cuentan los modales
+ * porque pueden solaparse (un ticket abierto sobre un pedido abierto).
+ */
+let modalesAbiertos = 0;
+function useMarcaModal() {
+  useEffect(() => {
+    modalesAbiertos += 1;
+    document.body.dataset.modal = "1";
+    return () => {
+      modalesAbiertos -= 1;
+      if (modalesAbiertos <= 0) { modalesAbiertos = 0; delete document.body.dataset.modal; }
+    };
+  }, []);
+}
+
+const Modal = ({ title, accent = VINO, onClose, children }) => {
+  useMarcaModal();
+  return (
+    <div className="modal-overlay">
+      <div className="modal-box" style={{ background: BG_CARD, border: `1px solid ${BORDER}`, boxShadow: "0 20px 60px #0003" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <h2 style={{ color: MARRON, margin: 0, fontSize: 19, fontFamily: TIPO_TIT, fontWeight: 800 }}>{title}</h2>
+          <button onClick={onClose} style={{ background: BG_APP, border: `1px solid ${BORDER}`, color: TEXT_SUB, fontSize: 16, cursor: "pointer", borderRadius: 8, width: 32, height: 32 }}>✕</button>
+        </div>
+        {children}
       </div>
-      {children}
     </div>
-  </div>
-);
+  );
+};
 
 const Empty = ({ texto }) => (
   <div style={{ textAlign: "center", padding: "40px 20px", color: TEXT_SUB, fontSize: 14 }}>
@@ -438,9 +467,16 @@ function FormularioPedido({ productos, clientes, repartidores, pedidos, onGuarda
   const [form, setForm] = useState(pedidoEditar || {
     clienteId: "", nombre: "", telefono: "", direccion: "", cp: "",
     tipoEntrega: "Domicilio", formaPago: "Efectivo", repartidorId: "",
-    rangoHorario: "", fecha: hoy(), estado: "Pendiente", items: [], envio: 0
+    // Nace Confirmado: un pedido que escribe el dueño es un pedido que ya está
+    // hablado con el cliente, normalmente por teléfono. "Pendiente" es para los
+    // que llegan de la tienda y hay que revisar. Se puede cambiar aquí abajo.
+    rangoHorario: "", fecha: hoy(), estado: "Confirmado", items: [], envio: 0,
+    documento: "Ticket", fiscal: { ...FISCAL_VACIO },
   });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const setFiscal = (k, v) => setForm(f => ({ ...f, fiscal: { ...FISCAL_VACIO, ...f.fiscal, [k]: v } }));
+  const fiscal = { ...FISCAL_VACIO, ...(form.fiscal || {}) };
+  const falta = form.documento === "Factura" ? faltaParaFacturar(fiscal) : [];
 
   // Huecos ya ocupados. El pedido que se está editando no se cuenta a sí mismo.
   const agendaForm = useMemo(
@@ -472,9 +508,40 @@ function FormularioPedido({ productos, clientes, repartidores, pedidos, onGuarda
   const subtotalProductos = form.items.reduce((s, i) => s + (i.subtotal || 0), 0);
   const total = subtotalProductos + (parseFloat(form.envio) || 0);
 
+  /**
+   * Al elegir un cliente se trae también cómo se le factura habitualmente y sus
+   * datos fiscales. Con tres o cuatro clientes de empresa, acordarse un viernes a
+   * las nueve de la noche de que la taberna va con albarán no es realista.
+   */
   const selCliente = (id) => {
     const c = clientes.find(c => c.id === id);
-    if (c) setForm(f => ({ ...f, clienteId: id, nombre: c.nombre, telefono: c.telefono, direccion: c.direccion, cp: c.cp }));
+    if (!c) return;
+    // Con una sola sede se elige sola; con varias, que lo diga el que hace el pedido.
+    const sedes = c.sedes || [];
+    const unica = sedes.length === 1 ? sedes[0] : null;
+    setForm(f => ({
+      ...f, clienteId: id, nombre: c.nombre, telefono: c.telefono,
+      direccion: unica?.direccion || c.direccion, cp: unica?.cp || c.cp,
+      sede: unica?.nombre || "",
+      documento: c.documentoHabitual || f.documento,
+      fiscal: {
+        ...FISCAL_VACIO, ...(c.fiscal || {}),
+        ...(unica?.contacto ? { contacto: unica.contacto } : {}),
+      },
+    }));
+  };
+
+  // Sedes del cliente elegido, para poder cambiar a dónde va la entrega.
+  const sedesCliente = clientes.find(c => c.id === form.clienteId)?.sedes || [];
+
+  const elegirSede = (nombre) => {
+    const s = sedesCliente.find(x => x.nombre === nombre);
+    if (!s) return;
+    setForm(f => ({
+      ...f, sede: s.nombre, direccion: s.direccion || f.direccion, cp: s.cp || f.cp,
+      telefono: s.telefono || f.telefono,
+      fiscal: { ...FISCAL_VACIO, ...f.fiscal, ...(s.contacto ? { contacto: s.contacto } : {}) },
+    }));
   };
 
   // Cliente que ya existe con ese teléfono (aunque esté escrito con prefijo o espacios).
@@ -489,6 +556,8 @@ function FormularioPedido({ productos, clientes, repartidores, pedidos, onGuarda
       nombre: clientePorTelefono.nombre || f.nombre,
       direccion: clientePorTelefono.direccion || f.direccion,
       cp: clientePorTelefono.cp || f.cp,
+      documento: clientePorTelefono.documentoHabitual || f.documento,
+      fiscal: { ...FISCAL_VACIO, ...(clientePorTelefono.fiscal || {}) },
     }));
   };
 
@@ -507,8 +576,46 @@ function FormularioPedido({ productos, clientes, repartidores, pedidos, onGuarda
           <Btn small variant="secondary" onClick={rellenarDesdeTelefono}>Traer sus datos</Btn>
         </div>
       )}
+      {/* Un negocio con varias sedes: a cuál va ESTE pedido. Al elegirla se
+          rellena la dirección, que es la que acabará en el albarán. */}
+      {sedesCliente.length > 1 && (
+        <Chips label="Sede a la que se entrega" accent={ac}
+          options={sedesCliente.map(s => s.nombre || s.direccion)}
+          value={form.sede || ""} onChange={elegirSede} />
+      )}
       <Input label="Dirección *" value={form.direccion} onChange={e => set("direccion", e.target.value)} placeholder="Calle, número, piso" />
       <Input label="Código Postal *" value={form.cp} onChange={e => set("cp", e.target.value)} placeholder="28XXX" />
+      {/* Qué papel se lleva el cliente. El ticket es lo normal; albarán y factura
+          son para negocios y piden los datos de quien compra. */}
+      <Chips label="Documento a entregar" accent={ac} options={DOCUMENTOS}
+        value={form.documento || "Ticket"} onChange={v => set("documento", v)} />
+      {pideFiscal(form.documento) && (
+        <div style={{ border: `1px solid ${BORDER}`, borderRadius: 12, padding: 14, marginBottom: 14, background: BG_APP }}>
+          <p style={{ color: TEXT_SUB, fontSize: 12, fontWeight: 700, margin: "0 0 10px", textTransform: "uppercase", letterSpacing: .5 }}>
+            Datos del negocio {form.documento === "Factura" ? "(obligatorios)" : "(para el albarán)"}
+          </p>
+          <Input label={form.documento === "Factura" ? "Razón social *" : "Nombre del negocio *"}
+            value={fiscal.razonSocial} onChange={e => setFiscal("razonSocial", e.target.value)} placeholder="Ej: Taberna El Puerto, S.L." />
+          <Input label={form.documento === "Factura" ? "NIF / CIF *" : "NIF / CIF"}
+            value={fiscal.nif} onChange={e => setFiscal("nif", e.target.value)} placeholder="Ej: B12345678" />
+          <Input label={form.documento === "Factura" ? "Dirección fiscal *" : "Dirección de entrega"}
+            value={fiscal.direccion} onChange={e => setFiscal("direccion", e.target.value)} placeholder="Calle, número" />
+          <Input label="Población" value={fiscal.poblacion} onChange={e => setFiscal("poblacion", e.target.value)} placeholder="Madrid" />
+          <Input label="Persona que recibe" value={fiscal.contacto} onChange={e => setFiscal("contacto", e.target.value)} placeholder="Quién firma la entrega" />
+          {form.documento === "Albarán" && (
+            <label style={{ display: "flex", alignItems: "center", gap: 8, color: TEXT_SUB, fontSize: 13, cursor: "pointer" }}>
+              <input type="checkbox" checked={!!form.albaranSinPrecios}
+                onChange={e => set("albaranSinPrecios", e.target.checked)} />
+              Albarán sin precios (lo firma un cocinero, no tiene por qué ver lo que paga su jefe)
+            </label>
+          )}
+          {falta.length > 0 && (
+            <p style={{ color: "#bf7d08", fontSize: 12.5, fontWeight: 700, margin: "8px 0 0" }}>
+              Para facturar falta: {falta.join(", ")}.
+            </p>
+          )}
+        </div>
+      )}
       <Chips label="Tipo de entrega" accent={ac} options={["Domicilio", "Recogida"]} value={form.tipoEntrega} onChange={v => cambiarTipoEntrega(v)} />
       <Chips label="Forma de pago" accent={ac} options={FORMAS_PAGO} value={form.formaPago} onChange={v => set("formaPago", v)} />
       <Input label="Fecha de entrega" type="date" value={form.fecha} onChange={e => set("fecha", e.target.value)} />
@@ -590,7 +697,11 @@ function FormularioPedido({ productos, clientes, repartidores, pedidos, onGuarda
       <Chips label="Estado del pedido" accent={ESTADO_COLORS[form.estado]} options={ESTADOS_PEDIDO} value={form.estado} onChange={v => set("estado", v)} />
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
         <Btn variant="secondary" onClick={onCerrar}>Cancelar</Btn>
-        <Btn accent={ac} onClick={() => onGuardar({ ...form, id: form.id || generarId(), total })}>Guardar Pedido</Btn>
+        <Btn accent={ac} disabled={falta.length > 0}
+          onClick={() => {
+            if (falta.length > 0) return;   // una factura sin NIF no le sirve a nadie
+            onGuardar({ ...form, fiscal, id: form.id || generarId(), total });
+          }}>Guardar Pedido</Btn>
       </div>
     </Modal>
   );
@@ -613,6 +724,9 @@ function TicketPedido({ pedido, repartidores, onCerrar }) {
   const repartidor = quienEntrega(pedido, repartidores);
   const domicilio = pedido.tipoEntrega === "Domicilio";
   const euros = n => (n || 0).toFixed(2) + " EUR";
+  // Los pedidos anteriores a la numeración no tienen código: se imprimen con las
+  // cuatro últimas cifras del id interno, que es corto y no se repite.
+  const numeroPedido = pedido.codigo || `#${String(pedido.id).slice(-4).toUpperCase()}`;
 
   const Fila = ({ izq, der, fuerte }) => (
     <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontWeight: fuerte ? 700 : 400 }}>
@@ -640,14 +754,20 @@ function TicketPedido({ pedido, repartidores, onCerrar }) {
         background: "#fff", color: "#000", width: 300, margin: "0 auto",
         fontFamily: "'Courier New', monospace", fontSize: 12.5, lineHeight: 1.45, padding: 10
       }}>
+        {/* El número, lo primero y a la derecha: es lo que se busca de un vistazo
+            cuando hay media docena de tickets pinchados en la cocina. */}
+        <div style={{ textAlign: "right", marginBottom: 6 }}>
+          <div style={{ fontSize: 9, letterSpacing: 1.5 }}>PEDIDO</div>
+          <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.05 }}>{numeroPedido}</div>
+        </div>
         <div style={{ textAlign: "center", fontWeight: 700, fontSize: 15 }}>DON PEPE SABOR</div>
-        <div style={{ textAlign: "center", fontSize: 11 }}>Calle Berrocal 56, 28021 Madrid</div>
+        <div style={{ textAlign: "center", fontSize: 11 }}>Calle Berrocal 7, 28021 Madrid</div>
         <div style={{ textAlign: "center", fontSize: 11 }}>WhatsApp 604 136 371</div>
         <Raya />
         <div style={{ textAlign: "center", fontSize: 11 }}>COMPROBANTE DE PEDIDO</div>
         <div style={{ textAlign: "center", fontSize: 10 }}>(no es una factura)</div>
         <Raya />
-        <Fila izq="Pedido" der={String(pedido.id).replace(/^web-/, "W")} />
+        {pedido.solicitud && <Fila izq="Solicitud" der={pedido.solicitud} />}
         <Fila izq="Entrega" der={`${pedido.fecha || ""} ${pedido.rangoHorario || ""}`.trim()} />
         <Fila izq="Cliente" der={pedido.nombre || "-"} />
         <Fila izq="Telefono" der={pedido.telefono || "-"} />
@@ -679,61 +799,434 @@ function TicketPedido({ pedido, repartidores, onCerrar }) {
       <p style={{ color: TEXT_SUB, fontSize: 12, margin: "12px 0 0" }}>
         Al imprimir, elige la impresora térmica y pon los márgenes en "ninguno".
       </p>
-      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
-        <Btn variant="secondary" onClick={onCerrar}>Cerrar</Btn>
-        <Btn accent={ac} onClick={() => window.print()}>🖨️ Imprimir</Btn>
-      </div>
+      <PieDocumento accent={ac} telefono={pedido.telefono}
+        asunto={`Pedido ${numeroPedido} · Don Pepe Sabor`}
+        texto={textoDocumento(pedido, null, "Ticket")}
+        onCerrar={onCerrar} onImprimir={() => window.print()} />
     </Modal>
   );
 }
 
-function FacturaPedido({ pedido, onCerrar }) {
-  const ac = ACENTOS.pedidos;
-  const { servicio, envio, total } = totalesPedido(pedido);
+/**
+ * Mandar el documento al cliente sin imprimirlo.
+ *
+ * Va como texto, no como PDF: desde el navegador no se puede adjuntar un archivo
+ * a WhatsApp, y un albarán escrito se lee igual de bien en el móvil. "Compartir"
+ * solo sale donde el móvil lo permite (Android e iPhone); en el ordenador se usan
+ * WhatsApp Web y el correo de siempre.
+ */
+function BotonEnviar({ texto, asunto, telefono, accent, abierto, setAbierto }) {
+  const [copiado, setCopiado] = useState(false);
+  const numero = whatsappDe(telefono);
+  const puedeCompartir = typeof navigator !== "undefined" && !!navigator.share;
+
+  const porWhatsapp = () => {
+    const base = numero ? `https://wa.me/${numero}` : "https://wa.me/";
+    window.open(`${base}?text=${encodeURIComponent(texto)}`, "_blank", "noopener");
+  };
+  const porCorreo = () => {
+    window.location.href = `mailto:?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(texto)}`;
+  };
+  const copiar = async () => {
+    try { await navigator.clipboard.writeText(texto); setCopiado(true); setTimeout(() => setCopiado(false), 2500); }
+    catch { alert("No se pudo copiar. Selecciona el texto a mano."); }
+  };
+  const compartir = async () => {
+    try { await navigator.share({ title: asunto, text: texto }); } catch { /* lo cerró */ }
+  };
+
+  if (!abierto) return null;
+
   return (
-    <Modal title="🧾 Factura" accent={ac} onClose={onCerrar}>
-      <div id="factura-imprimible">
-        <p style={{ color: TEXT_MAIN, fontWeight: 800, margin: "0 0 4px", fontSize: 16 }}>{pedido.nombre}</p>
-        <p style={{ color: TEXT_SUB, fontSize: 13, margin: "0 0 2px" }}>📞 {pedido.telefono}</p>
-        {pedido.tipoEntrega === "Domicilio" && <p style={{ color: TEXT_SUB, fontSize: 13, margin: "0 0 2px" }}>📍 {pedido.direccion} {pedido.cp}</p>}
-        <p style={{ color: TEXT_SUB, fontSize: 13, margin: "0 0 12px" }}>📅 {pedido.fecha} · 💳 {pedido.formaPago}</p>
-        {pedido.items?.map((it, i) => (
-          <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #25262f" }}>
-            <span style={{ color: TEXT_MAIN, fontSize: 14 }}>{it.cantidad}x {lineaFactura(it)}</span>
-            <span style={{ color: TEXT_MAIN, fontSize: 14, fontWeight: 700 }}>{(it.subtotal || 0).toFixed(2)}€</span>
+    <div className="envio-opciones">
+      <Btn small variant="secondary" accent="#22c55e" onClick={porWhatsapp}>💬 WhatsApp</Btn>
+      <Btn small variant="secondary" onClick={porCorreo}>✉️ Correo</Btn>
+      {puedeCompartir && <Btn small variant="secondary" accent={accent} onClick={compartir}>📲 Compartir</Btn>}
+      <Btn small variant="secondary" onClick={copiar}>{copiado ? "✓ Copiado" : "📋 Copiar"}</Btn>
+    </div>
+  );
+}
+
+/**
+ * Pie común de los cuatro documentos: cerrar, enviar e imprimir.
+ *
+ * Las opciones de envío salen en su propia fila, encima de los botones, en vez
+ * de empujarlos: en una pantalla de móvil, siete botones en una línea acaban
+ * unos sobre otros.
+ */
+function PieDocumento({ texto, asunto, telefono, accent, onCerrar, onImprimir, etiquetaImprimir = "🖨️ Imprimir" }) {
+  const [enviar, setEnviar] = useState(false);
+  return (
+    <>
+      <BotonEnviar texto={texto} asunto={asunto} telefono={telefono} accent={accent}
+        abierto={enviar} setAbierto={setEnviar} />
+      <div className="pie-documento">
+        <Btn variant="secondary" onClick={onCerrar}>Cerrar</Btn>
+        <Btn variant="secondary" onClick={() => setEnviar(v => !v)}>{enviar ? "▴ Enviar" : "📤 Enviar"}</Btn>
+        <Btn accent={accent} onClick={onImprimir}>{etiquetaImprimir}</Btn>
+      </div>
+    </>
+  );
+}
+
+/**
+ * Albarán de entrega para un negocio.
+ *
+ * NO es un documento fiscal: no lleva impuestos ni numeración legal, y por eso se
+ * puede emitir sin más. Su trabajo es que quien recibe el género pueda comprobar
+ * que lo que llegó es lo que pidió, y firmarlo. La factura va aparte: o la de ese
+ * mismo pedido, o la del mes entero agrupando todos los albaranes.
+ *
+ * Puede ir sin precios: muchas veces lo firma un cocinero o un camarero, que no
+ * tiene por qué ver lo que paga su jefe.
+ */
+function AlbaranPedido({ pedido, empresa, onCerrar }) {
+  const ac = ACENTOS.pedidos;
+  const { productos, servicio, envio, total } = totalesPedido(pedido);
+  const fritas = bandejasFritas(pedido);
+  const f = { ...FISCAL_VACIO, ...(pedido.fiscal || {}) };
+  const conPrecios = !pedido.albaranSinPrecios;
+  const euros = n => (n || 0).toFixed(2) + " €";
+  const numero = pedido.codigo || `#${String(pedido.id).slice(-4).toUpperCase()}`;
+  const emp = { ...EMPRESA_VACIA, ...(empresa || {}) };
+
+  const Linea = ({ izq, der, fuerte }) => (
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "6px 0",
+      borderBottom: "1px solid #ddd", fontWeight: fuerte ? 700 : 400 }}>
+      <span>{izq}</span><span>{der}</span>
+    </div>
+  );
+
+  return (
+    <Modal title="📋 Albarán de entrega" accent={ac} onClose={onCerrar}>
+      <style>{`
+        @media print {
+          body * { visibility: hidden !important; }
+          #albaran-imprimible, #albaran-imprimible * { visibility: visible !important; }
+          #albaran-imprimible { position: absolute; left: 0; top: 0; width: 100%; padding: 0; margin: 0; }
+          @page { size: A4; margin: 18mm; }
+        }
+      `}</style>
+
+      <div id="albaran-imprimible" style={{
+        background: "#fff", color: "#000", padding: 4,
+        fontFamily: "Arial, Helvetica, sans-serif", fontSize: 13, lineHeight: 1.5,
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 18 }}>{emp.nombre}</div>
+            <div style={{ fontSize: 12 }}>{emp.direccion || DIRECCION_LOCAL}</div>
+            {emp.nif && <div style={{ fontSize: 12 }}>NIF {emp.nif}</div>}
+            <div style={{ fontSize: 12 }}>WhatsApp {emp.telefono}</div>
           </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 11, letterSpacing: 2 }}>ALBARÁN</div>
+            <div style={{ fontSize: 24, fontWeight: 700, lineHeight: 1.1 }}>{numero}</div>
+            <div style={{ fontSize: 12 }}>{fechaLegible(pedido.fecha)}</div>
+          </div>
+        </div>
+
+        <div style={{ border: "1px solid #999", borderRadius: 4, padding: 10, marginBottom: 14 }}>
+          <div style={{ fontSize: 11, letterSpacing: 1, marginBottom: 4 }}>ENTREGAR A</div>
+          {/* Arriba el nombre con el que se conoce al sitio: es el que busca quien
+              reparte. La razón social va debajo, que es lo que pide el papel. */}
+          <div style={{ fontWeight: 700 }}>{pedido.nombre || f.razonSocial}</div>
+          {f.razonSocial && f.razonSocial !== pedido.nombre && (
+            <div style={{ fontSize: 12 }}>{f.razonSocial}</div>
+          )}
+          {f.nif && <div style={{ fontSize: 12 }}>NIF {f.nif}</div>}
+          {/* La dirección del albarán es a dónde VA la mercancía, no la fiscal:
+              un cliente con cuatro sedes factura en una y recibe en otra. */}
+          {pedido.sede && <div style={{ fontSize: 12, fontWeight: 700 }}>Sede: {pedido.sede}</div>}
+          <div style={{ fontSize: 12 }}>{pedido.direccion || f.direccion} {pedido.cp || ""}</div>
+          {pedido.telefono && <div style={{ fontSize: 12 }}>Tel. {pedido.telefono}</div>}
+        </div>
+
+        <div style={{ fontSize: 11, letterSpacing: 1, marginBottom: 2 }}>MERCANCÍA ENTREGADA</div>
+        <div style={{ borderTop: "2px solid #000" }} />
+        {(pedido.items || []).map((it, i) => (
+          <Linea key={i}
+            izq={`${it.cantidad} × ${it.nombreProducto} · ${it.presentacion} · ${preparacionDe(it)}`}
+            der={conPrecios ? euros(it.subtotal) : ""} />
         ))}
-        {servicio > 0 && (
-          <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #25262f" }}>
-            <span style={{ color: TEXT_MAIN, fontSize: 14 }}>Fritura</span>
-            <span style={{ color: TEXT_MAIN, fontSize: 14, fontWeight: 700 }}>{servicio.toFixed(2)}€</span>
+        {conPrecios && servicio > 0 && <Linea izq={fritas ? `Fritura (${fritas} bandejas)` : "Fritura"} der={euros(servicio)} />}
+        {conPrecios && envio > 0 && <Linea izq="Transporte" der={euros(envio)} />}
+        {conPrecios
+          ? <Linea izq="TOTAL" der={euros(total)} fuerte />
+          : <p style={{ fontSize: 11, margin: "10px 0 0", fontStyle: "italic" }}>
+              Albarán sin valorar. El importe va en la factura.
+            </p>}
+
+        {pedido.notas && <p style={{ fontSize: 12, marginTop: 10 }}>Observaciones: {pedido.notas}</p>}
+
+        <p style={{ fontSize: 11, marginTop: 16, color: "#444" }}>
+          Este documento acredita la entrega de la mercancía. No es una factura.
+        </p>
+
+        <div style={{ display: "flex", gap: 30, marginTop: 28 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ borderTop: "1px solid #000", paddingTop: 4, fontSize: 11 }}>Entregado por</div>
           </div>
-        )}
-        {envio > 0 && (
-          <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #25262f" }}>
-            <span style={{ color: TEXT_MAIN, fontSize: 14 }}>Envío</span>
-            <span style={{ color: TEXT_MAIN, fontSize: 14, fontWeight: 700 }}>{envio.toFixed(2)}€</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ borderTop: "1px solid #000", paddingTop: 4, fontSize: 11 }}>
+              Recibido {f.contacto ? `por ${f.contacto}` : "(nombre y firma)"}
+            </div>
           </div>
-        )}
-        <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 0 0" }}>
-          <span style={{ color: ac, fontSize: 16, fontWeight: 800 }}>TOTAL</span>
-          <span style={{ color: ac, fontSize: 16, fontWeight: 800 }}>{total.toFixed(2)}€</span>
         </div>
       </div>
-      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
-        <Btn variant="secondary" onClick={onCerrar}>Cerrar</Btn>
-        <Btn accent={ac} onClick={() => window.print()}>🖨️ Imprimir</Btn>
-      </div>
+
+      <PieDocumento accent={ac} telefono={pedido.telefono}
+        asunto={`Albarán ${numero} · ${emp.nombre}`}
+        texto={textoDocumento(pedido, empresa, "Albarán")}
+        onCerrar={onCerrar} onImprimir={() => window.print()} />
     </Modal>
   );
 }
 
-function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes, setClientes, repartidores }) {
+/**
+ * Factura del pedido.
+ *
+ * Mientras los datos fiscales de la empresa no estén puestos en ⚙️ Administración,
+ * sale marcada como PROFORMA y lo dice en el papel. No es un adorno: una factura
+ * necesita NIF del que vende, numeración correlativa sin huecos y el tipo de IVA
+ * correcto de cada producto, y además hay que saber si aplica Verifactu (software
+ * homologado). Imprimir algo que parezca una factura sin eso es peor que no tener
+ * nada, porque el cliente se la lleva creyendo que le sirve.
+ *
+ * El IVA no se suma encima: los precios de la tienda ya lo llevan dentro, así que
+ * se desglosa hacia atrás a partir del total.
+ */
+function FacturaPedido({ pedido, empresa, onCerrar }) {
+  const ac = ACENTOS.pedidos;
+  const { servicio, envio, total } = totalesPedido(pedido);
+  const emp = { ...EMPRESA_VACIA, ...(empresa || {}) };
+  const f = { ...FISCAL_VACIO, ...(pedido.fiscal || {}) };
+  const valida = empresaLista(emp);
+  const { tipo, base, cuota } = desglosaIva(total, emp.iva);
+  const euros = n => (n || 0).toFixed(2) + " €";
+  const numero = pedido.codigo || `#${String(pedido.id).slice(-4).toUpperCase()}`;
+
+  const Linea = ({ izq, der, fuerte }) => (
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "6px 0",
+      borderBottom: "1px solid #ddd", fontWeight: fuerte ? 700 : 400 }}>
+      <span>{izq}</span><span>{der}</span>
+    </div>
+  );
+
+  return (
+    <Modal title={valida ? "🧾 Factura" : "🧾 Factura proforma"} accent={ac} onClose={onCerrar}>
+      {!valida && (
+        <div style={{ background: "#bf7d0818", border: "1px solid #bf7d0855", borderRadius: 10, padding: 12, marginBottom: 14 }}>
+          <p style={{ color: "#bf7d08", fontSize: 13, fontWeight: 800, margin: "0 0 4px" }}>Esto todavía no es una factura válida</p>
+          <p style={{ color: TEXT_SUB, fontSize: 12.5, margin: 0 }}>
+            Faltan tus datos fiscales. Ponlos en ⚙️ Administración → Datos de la empresa
+            (NIF, dirección y tipo de IVA) y deja de salir el sello de proforma. Confirma
+            antes con tu gestor el IVA de cada producto y si te aplica Verifactu.
+          </p>
+        </div>
+      )}
+
+      <style>{`
+        @media print {
+          body * { visibility: hidden !important; }
+          #factura-imprimible, #factura-imprimible * { visibility: visible !important; }
+          #factura-imprimible { position: absolute; left: 0; top: 0; width: 100%; padding: 0; margin: 0; }
+          @page { size: A4; margin: 18mm; }
+        }
+      `}</style>
+
+      <div id="factura-imprimible" style={{
+        background: "#fff", color: "#000", padding: 4,
+        fontFamily: "Arial, Helvetica, sans-serif", fontSize: 13, lineHeight: 1.5,
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 18 }}>{emp.nombre}</div>
+            <div style={{ fontSize: 12 }}>{emp.direccion || DIRECCION_LOCAL}</div>
+            <div style={{ fontSize: 12 }}>{emp.nif ? `NIF ${emp.nif}` : "NIF: pendiente"}</div>
+            <div style={{ fontSize: 12 }}>WhatsApp {emp.telefono}</div>
+          </div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 11, letterSpacing: 2 }}>{valida ? "FACTURA" : "PROFORMA"}</div>
+            <div style={{ fontSize: 24, fontWeight: 700, lineHeight: 1.1 }}>{numero}</div>
+            <div style={{ fontSize: 12 }}>{fechaLegible(pedido.fecha)}</div>
+          </div>
+        </div>
+
+        <div style={{ border: "1px solid #999", borderRadius: 4, padding: 10, marginBottom: 14 }}>
+          <div style={{ fontSize: 11, letterSpacing: 1, marginBottom: 4 }}>FACTURAR A</div>
+          <div style={{ fontWeight: 700 }}>{f.razonSocial || pedido.nombre}</div>
+          {f.nif && <div style={{ fontSize: 12 }}>NIF {f.nif}</div>}
+          <div style={{ fontSize: 12 }}>{f.direccion || pedido.direccion} {f.poblacion || ""} {f.cp || pedido.cp}</div>
+        </div>
+
+        <div style={{ borderTop: "2px solid #000" }} />
+        {(pedido.items || []).map((it, i) => (
+          <Linea key={i} izq={`${it.cantidad} × ${lineaFactura(it)}`} der={euros(it.subtotal)} />
+        ))}
+        {servicio > 0 && <Linea izq="Fritura" der={euros(servicio)} />}
+        {envio > 0 && <Linea izq="Transporte" der={euros(envio)} />}
+
+        <div style={{ marginTop: 10, marginLeft: "auto", width: 260 }}>
+          <Linea izq="Base imponible" der={euros(base)} />
+          <Linea izq={`IVA ${tipo} %`} der={euros(cuota)} />
+          <Linea izq="TOTAL" der={euros(total)} fuerte />
+        </div>
+
+        <p style={{ fontSize: 12, marginTop: 12 }}>Forma de pago: {pedido.formaPago || "—"}</p>
+
+        {!valida && (
+          <p style={{ fontSize: 12, marginTop: 14, fontWeight: 700, border: "2px solid #000", padding: 8, textAlign: "center" }}>
+            DOCUMENTO PROFORMA · SIN VALIDEZ FISCAL
+          </p>
+        )}
+      </div>
+
+      <PieDocumento accent={ac} telefono={pedido.telefono}
+        asunto={`${valida ? "Factura" : "Factura proforma"} ${numero} · ${emp.nombre}`}
+        texto={textoDocumento(pedido, empresa, "Factura")}
+        onCerrar={onCerrar} onImprimir={() => window.print()} />
+    </Modal>
+  );
+}
+
+/**
+ * Los albaranes de un negocio en un mes, sumados, para facturarlos de una vez.
+ *
+ * Es lo normal entre empresas: se entrega con albarán cada vez y se factura una
+ * sola vez a fin de mes (factura recapitulativa). Esta pantalla no emite la
+ * factura —eso espera a los datos fiscales—, prepara el resumen: qué albaranes
+ * entran, qué se llevó cada día y cuánto suma todo.
+ */
+function ResumenMes({ pedidos, empresa, onCerrar }) {
+  const ac = ACENTOS.pedidos;
+  const emp = { ...EMPRESA_VACIA, ...(empresa || {}) };
+  const [mes, setMes] = useState(() => hoy().slice(0, 7));
+
+  // Solo albaranes: un ticket ya se cobró y una factura ya se emitió aparte.
+  const albaranes = pedidos.filter(p =>
+    p.documento === "Albarán" && p.estado !== "Cancelado" && String(p.fecha || "").startsWith(mes));
+
+  // Agrupados por negocio: la razón social es quien recibe la factura.
+  const porNegocio = albaranes.reduce((g, p) => {
+    const clave = (p.fiscal?.razonSocial || p.nombre || "Sin nombre").trim();
+    (g[clave] = g[clave] || []).push(p);
+    return g;
+  }, {});
+  const negocios = Object.keys(porNegocio).sort((a, b) => a.localeCompare(b));
+
+  const [negocio, setNegocio] = useState("");
+  const elegido = negocio && porNegocio[negocio] ? negocio : negocios[0] || "";
+  const suyos = (porNegocio[elegido] || []).sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
+  const total = suyos.reduce((t, p) => t + totalesPedido(p).total, 0);
+  const { tipo, base, cuota } = desglosaIva(total, emp.iva);
+  const fiscal = { ...FISCAL_VACIO, ...(suyos[0]?.fiscal || {}) };
+  const euros = n => (n || 0).toFixed(2) + " €";
+
+  // El mismo resumen, escrito, para mandárselo al negocio por WhatsApp o correo.
+  const textoResumen = [
+    `*${emp.nombre}*`,
+    `RESUMEN PARA FACTURAR · ${mesLegible(mes).toUpperCase()}`,
+    "",
+    `*${elegido}*`,
+    fiscal.nif ? `NIF: ${fiscal.nif}` : "",
+    "",
+    ...suyos.map(p => `• ${p.codigo || `#${String(p.id).slice(-4).toUpperCase()}`} · ${fechaLegible(p.fecha)}${p.sede ? ` · ${p.sede}` : ""} — ${euros(totalesPedido(p).total)}`),
+    "",
+    `Base imponible: ${euros(base)}`,
+    `IVA ${tipo} %: ${euros(cuota)}`,
+    `*TOTAL: ${euros(total)}*`,
+    "",
+    `${suyos.length} albar${suyos.length === 1 ? "án" : "anes"}. Resumen de albaranes, no es una factura.`,
+  ].filter((l, i, a) => !(l === "" && a[i - 1] === "")).join("\n");
+
+  return (
+    <Modal title="📄 Facturar un mes" accent={ac} onClose={onCerrar}>
+      <style>{`
+        @media print {
+          body * { visibility: hidden !important; }
+          #resumen-imprimible, #resumen-imprimible * { visibility: visible !important; }
+          #resumen-imprimible { position: absolute; left: 0; top: 0; width: 100%; padding: 0; margin: 0; }
+          @page { size: A4; margin: 18mm; }
+        }
+      `}</style>
+
+      <Input label="Mes" type="month" value={mes} onChange={e => setMes(e.target.value)} />
+
+      {negocios.length === 0 ? (
+        <Empty texto={`No hay albaranes en ${mesLegible(mes)}`} />
+      ) : (
+        <>
+          <Chips label="Negocio" accent={ac} options={negocios} value={elegido} onChange={setNegocio} />
+
+          <div id="resumen-imprimible" style={{
+            background: "#fff", color: "#000", padding: 14, borderRadius: 8,
+            fontFamily: "Arial, Helvetica, sans-serif", fontSize: 13, lineHeight: 1.5,
+          }}>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>{emp.nombre}</div>
+            <div style={{ fontSize: 12, marginBottom: 12 }}>{emp.direccion || DIRECCION_LOCAL}</div>
+
+            <div style={{ fontSize: 11, letterSpacing: 1 }}>RESUMEN PARA FACTURAR · {mesLegible(mes).toUpperCase()}</div>
+            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 2 }}>{elegido}</div>
+            {fiscal.nif && <div style={{ fontSize: 12 }}>NIF {fiscal.nif}</div>}
+            {fiscal.direccion && <div style={{ fontSize: 12, marginBottom: 10 }}>{fiscal.direccion} {fiscal.poblacion}</div>}
+
+            <div style={{ borderTop: "2px solid #000", marginTop: 8 }} />
+            {suyos.map(p => (
+              <div key={p.id} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "6px 0", borderBottom: "1px solid #ddd" }}>
+                <span>
+                  <strong>{p.codigo || `#${String(p.id).slice(-4).toUpperCase()}`}</strong> · {fechaLegible(p.fecha)}
+                  {p.sede && <span style={{ color: "#555" }}> · {p.sede}</span>}
+                  <span style={{ color: "#555" }}> · {(p.items || []).reduce((t, i) => t + (Number(i.cantidad) || 0), 0)} bandejas</span>
+                </span>
+                <span>{euros(totalesPedido(p).total)}</span>
+              </div>
+            ))}
+
+            <div style={{ marginTop: 10, marginLeft: "auto", width: 260 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid #ddd" }}>
+                <span>Base imponible</span><span>{euros(base)}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid #ddd" }}>
+                <span>IVA {tipo} %</span><span>{euros(cuota)}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid #ddd", fontWeight: 700 }}>
+                <span>TOTAL</span><span>{euros(total)}</span>
+              </div>
+            </div>
+
+            <p style={{ fontSize: 11, marginTop: 14, fontWeight: 700, border: "2px solid #000", padding: 8, textAlign: "center" }}>
+              RESUMEN DE ALBARANES · NO ES UNA FACTURA
+            </p>
+            <p style={{ fontSize: 11, color: "#444" }}>
+              {suyos.length} albar{suyos.length === 1 ? "án" : "anes"} de {mesLegible(mes)}.
+            </p>
+          </div>
+        </>
+      )}
+
+      {negocios.length > 0 ? (
+        <PieDocumento accent={ac} telefono={suyos[0]?.telefono}
+          asunto={`Albaranes de ${mesLegible(mes)} · ${elegido}`}
+          texto={textoResumen} etiquetaImprimir="🖨️ Imprimir resumen"
+          onCerrar={onCerrar} onImprimir={() => window.print()} />
+      ) : (
+        <div className="pie-documento">
+          <Btn variant="secondary" onClick={onCerrar}>Cerrar</Btn>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes, setClientes, repartidores, empresa }) {
   const ac = ACENTOS.pedidos;
   const [modal, setModal] = useState(false);
   const [editar, setEditar] = useState(null);
   const [facturaPedido, setFacturaPedido] = useState(null);
+  const [albaranPedido, setAlbaranPedido] = useState(null);
   const [ticketPedido, setTicketPedido] = useState(null);
+  const [resumenMes, setResumenMes] = useState(false);
   const [expandido, setExpandido] = useState(null);   // id del pedido abierto
   // Al entrar se muestran los pendientes: es lo que hay que atender.
   const [filtroEstado, setFiltroEstado] = useState("Pendiente");
@@ -759,16 +1252,25 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
 
   const guardar = (p) => {
     const esNuevo = !editar;
-    setPedidos(prev => esNuevo ? [p, ...prev] : prev.map(x => x.id === p.id ? p : x));
+    // El número definitivo se pone aquí, con la lista delante: es el único sitio
+    // donde se sabe cuántos pedidos hay ya para ese día de entrega.
+    setPedidos(prev => esNuevo
+      ? [p.codigo?.startsWith("P") ? p : { ...p, codigo: siguienteCodigo(p.fecha, prev) }, ...prev]
+      : prev.map(x => x.id === p.id ? p : x));
 
     // La ficha del cliente se crea o se actualiza sola con lo que traiga el pedido.
     const cifras = soloCifras(p.telefono);
     if (cifras.length >= 9) {
       setClientes(cs => {
         const i = cs.findIndex(c => soloCifras(c.telefono) === cifras);
+        // Si el pedido lleva albarán o factura, el cliente se queda con sus datos
+        // fiscales y con la forma en que se le factura: la próxima vez sale solo.
+        const deEmpresa = pideFiscal(p.documento)
+          ? { fiscal: { ...FISCAL_VACIO, ...(p.fiscal || {}) }, documentoHabitual: p.documento }
+          : {};
         if (i === -1) {
           return [...cs, { id: generarId(), nombre: p.nombre || "", telefono: p.telefono || "",
-                           direccion: p.direccion || "", cp: p.cp || "" }];
+                           direccion: p.direccion || "", cp: p.cp || "", ...deEmpresa }];
         }
         const actual = cs[i];
         const copia = [...cs];
@@ -777,6 +1279,7 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
           nombre: actual.nombre || p.nombre || "",
           direccion: p.direccion || actual.direccion || "",
           cp: p.cp || actual.cp || "",
+          ...deEmpresa,
         };
         return copia;
       });
@@ -802,10 +1305,13 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
    * lo que evita que se vuelva a colar dos veces.
    */
   const aceptarWeb = (w) => {
-    const { _id, creado, km, ...datos } = w;
+    const { _id, creado, km, codigo, ...datos } = w;
     guardar({
       ...datos,
       id: generarId(),
+      // La S que vio el cliente al pedir se guarda como referencia; el número
+      // bueno (la P con su correlativo) lo pone `guardar`.
+      solicitud: codigo || "",
       estado: "Pendiente",
       origen: "web",
       repartidorId: datos.tipoEntrega === "Recogida" ? REPARTIDOR_TIENDA_ID : "",
@@ -824,16 +1330,29 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
     setEstadoPendiente(null);
   };
 
+  /**
+   * Cambiar quién lleva el pedido sin abrir el formulario.
+   *
+   * No pregunta nada, a diferencia del estado: asignar un reparto es barato y se
+   * deshace pulsando otro nombre. El estado sí avisa al cliente, y de eso no se vuelve.
+   */
+  const asignarRepartidor = (id, repartidorId) =>
+    setPedidos(p => p.map(x => x.id === id ? { ...x, repartidorId } : x));
+
+  // Los de la calle. "Recoger en Tienda" no es un reparto: no entra en la lista.
+  const repartidoresDeCalle = (repartidores || []).filter(r => r.id !== REPARTIDOR_TIENDA_ID);
+
   const filtrados = pedidos
     .filter(p => (filtroEstado === "Todos" || p.estado === filtroEstado) && (!filtroFecha || p.fecha === filtroFecha))
-    // Día más reciente primero; dentro del día, por estado (pendientes arriba) y luego por hora.
+    // Lo que hay que cocinar antes, arriba: hoy primero, luego mañana, y así.
+    // Un pedido sin fecha no tiene prisa conocida: al final, no estorbando los de hoy.
     .sort((a, b) =>
-      String(b.fecha || "").localeCompare(String(a.fecha || "")) ||
+      String(a.fecha || "9999-99-99").localeCompare(String(b.fecha || "9999-99-99")) ||
       ESTADOS_PEDIDO.indexOf(a.estado) - ESTADOS_PEDIDO.indexOf(b.estado) ||
       String(a.rangoHorario || "~").localeCompare(String(b.rangoHorario || "~"))
     );
 
-  // Los pedidos se agrupan por día de entrega, del más reciente al más antiguo.
+  // Los pedidos se agrupan por día de entrega, del más próximo al más lejano.
   const porFecha = filtrados.reduce((grupos, p) => {
     const dia = p.fecha || "Sin fecha";
     (grupos[dia] = grupos[dia] || []).push(p);
@@ -844,7 +1363,10 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <h2 style={{ color: ac, margin: 0, fontFamily: TIPO_TIT, fontWeight: 800}}>Pedidos</h2>
-        <Btn accent={ac} onClick={() => { setEditar(null); setModal(true); }}>+ Nuevo</Btn>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Btn variant="secondary" onClick={() => setResumenMes(true)}>📄 Facturar mes</Btn>
+          <Btn accent={ac} onClick={() => { setEditar(null); setModal(true); }}>+ Nuevo</Btn>
+        </div>
       </div>
 
       <Chips accent={ac} options={["Todos", ...ESTADOS_PEDIDO]} value={filtroEstado} onChange={setFiltroEstado} />
@@ -924,6 +1446,13 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ color: TEXT_MAIN, fontWeight: 800, margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {p.tipoEntrega === "Recogida" ? "🏪" : "🚚"} {p.nombre}
+                    {/* Un pedido de empresa no se trata igual: que se vea sin abrirlo. */}
+                    {pideFiscal(p.documento) && (
+                      <span style={{ marginLeft: 6, fontSize: 10.5, fontWeight: 800, color: MARRON,
+                        background: `${MARRON}18`, border: `1px solid ${MARRON}44`, borderRadius: 6, padding: "1px 6px" }}>
+                        {p.documento === "Albarán" ? "ALBARÁN" : "FACTURA"}
+                      </span>
+                    )}
                   </p>
                   <p style={{ color: TEXT_SUB, fontSize: 12.5, margin: "2px 0 0" }}>
                     {p.rangoHorario ? `⏰ ${p.rangoHorario}` : "Sin hora"} · {unidades} bandeja{unidades === 1 ? "" : "s"}
@@ -964,13 +1493,28 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
                           window.open(enlace, "_blank", "noopener");
                         }}>💬</Btn>
                       <Btn small variant="secondary" onClick={() => { setEditar(p); setModal(true); }}>✏️</Btn>
-                      <Btn small variant="success" onClick={() => setFacturaPedido(p)}>🧾</Btn>
-                      <Btn small variant="secondary" onClick={() => setTicketPedido(p)}>🖨️</Btn>
+                      {/* El papel lleva el número de pedido, y ese número vale
+                          cuando el pedido está aceptado: pendiente aún puede caerse. */}
+                      {p.estado !== "Pendiente" && p.estado !== "Cancelado" && (
+                        p.documento === "Albarán"
+                          ? <Btn small variant="secondary" onClick={() => setAlbaranPedido(p)}>📋 Albarán</Btn>
+                          : p.documento === "Factura"
+                            ? <Btn small variant="success" onClick={() => setFacturaPedido(p)}>🧾 Factura</Btn>
+                            : <Btn small variant="secondary" onClick={() => setTicketPedido(p)}>🖨️</Btn>
+                      )}
                       <Btn small variant="danger" onClick={() => eliminar(p.id)}>🗑️</Btn>
                     </div>
                   </div>
                   <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #25262f" }}>
-                    <Chips accent={ESTADO_COLORS[p.estado]} options={ESTADOS_PEDIDO} value={p.estado} onChange={v => cambiarEstado(p.id, v)} />
+                    <Chips label="Estado del pedido" accent={ESTADO_COLORS[p.estado]} options={ESTADOS_PEDIDO} value={p.estado} onChange={v => cambiarEstado(p.id, v)} />
+                    {/* Quién lo lleva, aquí mismo: antes había que abrir el formulario entero. */}
+                    {p.tipoEntrega === "Recogida"
+                      ? <p style={{ color: TEXT_SUB, fontSize: 12.5, margin: 0 }}>🏪 Lo recoge el cliente en tienda: no necesita repartidor.</p>
+                      : repartidoresDeCalle.length === 0
+                        ? <p style={{ color: TEXT_SUB, fontSize: 12.5, margin: 0 }}>Todavía no hay repartidores dados de alta. Créalos en 🛵 Repartidores.</p>
+                        : <Chips label="Repartidor" accent={ac}
+                            options={[{ value: "", label: "Sin asignar" }, ...repartidoresDeCalle.map(r => ({ value: r.id, label: r.nombre }))]}
+                            value={p.repartidorId || ""} onChange={v => asignarRepartidor(p.id, v)} />}
                   </div>
                 </div>
               )}
@@ -984,7 +1528,9 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
         <FormularioPedido productos={productos} clientes={clientes} repartidores={repartidores} pedidos={pedidos}
           onGuardar={guardar} onCerrar={() => { setModal(false); setEditar(null); }} pedidoEditar={editar} />
       )}
-      {facturaPedido && <FacturaPedido pedido={facturaPedido} onCerrar={() => setFacturaPedido(null)} />}
+      {facturaPedido && <FacturaPedido pedido={facturaPedido} empresa={empresa} onCerrar={() => setFacturaPedido(null)} />}
+      {albaranPedido && <AlbaranPedido pedido={albaranPedido} empresa={empresa} onCerrar={() => setAlbaranPedido(null)} />}
+      {resumenMes && <ResumenMes pedidos={pedidos} empresa={empresa} onCerrar={() => setResumenMes(false)} />}
       {ticketPedido && <TicketPedido pedido={ticketPedido} repartidores={repartidores} onCerrar={() => setTicketPedido(null)} />}
 
       {estadoPendiente && (() => {
@@ -1160,15 +1706,48 @@ function ModuloRutas({ pedidos }) {
 function ModuloClientes({ clientes, setClientes, pedidos, irInicio }) {
   const ac = ACENTOS.clientes;
   const [modal, setModal] = useState(false);
-  const [form, setForm] = useState({ nombre: "", telefono: "", direccion: "", cp: "" });
+  const VACIO = { nombre: "", telefono: "", direccion: "", cp: "", documentoHabitual: "Ticket", fiscal: { ...FISCAL_VACIO }, sedes: [] };
+  const [form, setForm] = useState(VACIO);
+  const [editar, setEditar] = useState(null);   // id del cliente que se está cambiando
   const [buscar, setBuscar] = useState("");
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const setFiscal = (k, v) => setForm(f => ({ ...f, fiscal: { ...FISCAL_VACIO, ...f.fiscal, [k]: v } }));
+
+  const abrirNuevo = () => { setForm(VACIO); setEditar(null); setModal(true); };
+  const abrirEditar = (c) => {
+    setForm({ ...VACIO, ...c, fiscal: { ...FISCAL_VACIO, ...(c.fiscal || {}) }, sedes: c.sedes || [] });
+    setEditar(c.id); setModal(true);
+  };
+
+  /**
+   * Sedes: un mismo negocio que recibe en varios sitios.
+   *
+   * Los datos fiscales son uno solo (una razón social, un CIF, una factura), pero
+   * la mercancía va a cuatro direcciones distintas. Por eso las sedes cuelgan del
+   * cliente y no son cuatro clientes: así el albarán lleva la dirección correcta
+   * y a fin de mes todo se factura junto.
+   */
+  const añadirSede = () => setForm(f => ({
+    ...f, sedes: [...(f.sedes || []), { id: generarId(), nombre: "", direccion: "", cp: "", telefono: "", contacto: "" }],
+  }));
+  const cambiarSede = (id, k, v) => setForm(f => ({
+    ...f, sedes: (f.sedes || []).map(s => s.id === id ? { ...s, [k]: v } : s),
+  }));
+  const quitarSede = (id) => setForm(f => ({ ...f, sedes: (f.sedes || []).filter(s => s.id !== id) }));
+
   const guardar = () => {
     if (!form.nombre || !form.telefono) return;
-    setClientes(c => [...c, { ...form, id: generarId() }]);
-    setForm({ nombre: "", telefono: "", direccion: "", cp: "" });
-    setModal(false);
+    // Si no es un cliente de empresa, no se le guardan datos fiscales a medias.
+    // Las sedes a medio escribir (sin nombre ni dirección) tampoco se guardan.
+    const sedes = (form.sedes || []).filter(s => (s.nombre || "").trim() || (s.direccion || "").trim());
+    const limpio = pideFiscal(form.documentoHabitual)
+      ? { ...form, sedes }
+      : { ...form, sedes, fiscal: { ...FISCAL_VACIO }, documentoHabitual: "Ticket" };
+    setClientes(c => editar
+      ? c.map(x => x.id === editar ? { ...x, ...limpio, id: editar } : x)
+      : [...c, { ...limpio, id: generarId() }]);
+    setForm(VACIO); setEditar(null); setModal(false);
   };
 
   const buscarDigitos = buscar.replace(/\D/g, "");
@@ -1182,7 +1761,7 @@ function ModuloClientes({ clientes, setClientes, pedidos, irInicio }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <h2 style={{ color: ac, margin: 0, fontFamily: TIPO_TIT, fontWeight: 800}}>Clientes</h2>
         <div style={{ display: "flex", gap: 8 }}>
-          <Btn accent={ac} onClick={() => setModal(true)}>+ Nuevo</Btn>
+          <Btn accent={ac} onClick={abrirNuevo}>+ Nuevo</Btn>
         </div>
       </div>
       <Input placeholder="🔍 Buscar por nombre o teléfono..." value={buscar} onChange={e => setBuscar(e.target.value)} />
@@ -1194,26 +1773,88 @@ function ModuloClientes({ clientes, setClientes, pedidos, irInicio }) {
           <Card key={c.id} accent={ac}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
-                <p style={{ color: TEXT_MAIN, fontWeight: 800, margin: "0 0 4px" }}>{c.nombre}</p>
+                <p style={{ color: TEXT_MAIN, fontWeight: 800, margin: "0 0 4px" }}>
+                  {c.nombre}
+                  {pideFiscal(c.documentoHabitual) && (
+                    <span style={{ marginLeft: 6, fontSize: 10.5, fontWeight: 800, color: MARRON,
+                      background: `${MARRON}18`, border: `1px solid ${MARRON}44`, borderRadius: 6, padding: "1px 6px" }}>
+                      {c.documentoHabitual === "Albarán" ? "ALBARÁN" : "FACTURA"}
+                    </span>
+                  )}
+                </p>
                 <p style={{ color: TEXT_SUB, fontSize: 13, margin: "0 0 2px" }}>📞 {c.telefono}</p>
                 {c.direccion && <p style={{ color: TEXT_SUB, fontSize: 13, margin: "0 0 2px" }}>📍 {c.direccion} {c.cp}</p>}
+                {c.fiscal?.razonSocial && (
+                  <p style={{ color: TEXT_SUB, fontSize: 13, margin: "0 0 2px" }}>
+                    🏢 {c.fiscal.razonSocial}{c.fiscal.nif ? ` · ${c.fiscal.nif}` : ""}
+                  </p>
+                )}
                 <p style={{ color: "#666", fontSize: 12, margin: "4px 0 0" }}>
                   {historial.length} pedido{historial.length !== 1 ? "s" : ""}{totalGastado > 0 && ` · ${totalGastado.toFixed(2)}€ total`}
                 </p>
               </div>
-              <Btn small variant="danger" onClick={() => setClientes(cl => cl.filter(x => x.id !== c.id))}>🗑️</Btn>
+              <div style={{ display: "flex", gap: 6 }}>
+                <Btn small variant="secondary" onClick={() => abrirEditar(c)}>✏️</Btn>
+                <Btn small variant="danger" onClick={() => setClientes(cl => cl.filter(x => x.id !== c.id))}>🗑️</Btn>
+              </div>
             </div>
           </Card>
         );
       })}
 
       {modal && (
-        <Modal title="Nuevo Cliente" accent={ac} onClose={() => setModal(false)}>
-          <Input label="Nombre y Apellido *" value={form.nombre} onChange={e => set("nombre", e.target.value)} />
+        <Modal title={editar ? "Editar cliente" : "Nuevo Cliente"} accent={ac} onClose={() => setModal(false)}>
+          <Input label="Nombre *" value={form.nombre} onChange={e => set("nombre", e.target.value)}
+            placeholder="Como lo llamas tú: Trujillo Burgers" />
           <Input label="Teléfono *" value={form.telefono} onChange={e => set("telefono", e.target.value)} />
           <Input label="Dirección" value={form.direccion} onChange={e => set("direccion", e.target.value)} />
           <Input label="Código Postal" value={form.cp} onChange={e => set("cp", e.target.value)} />
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+
+          {/* Cómo se le factura habitualmente. Al elegirlo en un pedido, la app
+              marca sola el documento y trae estos datos ya rellenos. */}
+          <Chips label="Documento habitual" accent={ac} options={DOCUMENTOS}
+            value={form.documentoHabitual || "Ticket"} onChange={v => set("documentoHabitual", v)} />
+          {pideFiscal(form.documentoHabitual) && (
+            <div style={{ border: `1px solid ${BORDER}`, borderRadius: 12, padding: 14, marginBottom: 14, background: BG_APP }}>
+              <p style={{ color: TEXT_SUB, fontSize: 12, fontWeight: 700, margin: "0 0 10px", textTransform: "uppercase", letterSpacing: .5 }}>
+                Datos fiscales
+              </p>
+              <Input label="Razón social" value={form.fiscal?.razonSocial || ""} onChange={e => setFiscal("razonSocial", e.target.value)}
+                placeholder="Quien factura: Unión Trujillo S.L." />
+              <Input label="NIF / CIF" value={form.fiscal?.nif || ""} onChange={e => setFiscal("nif", e.target.value)} placeholder="B88556998" />
+              <Input label="Dirección fiscal" value={form.fiscal?.direccion || ""} onChange={e => setFiscal("direccion", e.target.value)} placeholder="Calle Bolívar 18" />
+              <Input label="Población" value={form.fiscal?.poblacion || ""} onChange={e => setFiscal("poblacion", e.target.value)} placeholder="Madrid" />
+              <Input label="Persona que recibe" value={form.fiscal?.contacto || ""} onChange={e => setFiscal("contacto", e.target.value)} placeholder="Quién firma la entrega" />
+            </div>
+          )}
+
+          {/* Sedes: mismo CIF, varias direcciones de entrega. */}
+          <div style={{ border: `1px solid ${BORDER}`, borderRadius: 12, padding: 14, marginBottom: 14, background: BG_APP }}>
+            <p style={{ color: TEXT_SUB, fontSize: 12, fontWeight: 700, margin: "0 0 4px", textTransform: "uppercase", letterSpacing: .5 }}>
+              Sedes
+            </p>
+            <p style={{ color: TEXT_SUB, fontSize: 12.5, margin: "0 0 10px", lineHeight: 1.5 }}>
+              Solo si el negocio recibe en varios sitios. Al hacer el pedido eliges a cuál
+              va, y el albarán sale con esa dirección. La factura sigue siendo una sola.
+            </p>
+            {(form.sedes || []).map((s, i) => (
+              <div key={s.id} style={{ border: `1px solid ${BORDER}`, borderRadius: 10, padding: 10, marginBottom: 8, background: BG_CARD }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                  <span style={{ color: TEXT_SUB, fontSize: 12, fontWeight: 700 }}>Sede {i + 1}</span>
+                  <button onClick={() => quitarSede(s.id)}
+                    style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: 16 }}>✕</button>
+                </div>
+                <Input label="Nombre de la sede" value={s.nombre} onChange={e => cambiarSede(s.id, "nombre", e.target.value)} placeholder="Ej: Bolívar" />
+                <Input label="Dirección" value={s.direccion} onChange={e => cambiarSede(s.id, "direccion", e.target.value)} placeholder="Calle y número" />
+                <Input label="Código postal" value={s.cp} onChange={e => cambiarSede(s.id, "cp", e.target.value)} placeholder="28045" />
+                <Input label="Teléfono de la sede" value={s.telefono || ""} onChange={e => cambiarSede(s.id, "telefono", e.target.value)} placeholder="Para que el repartidor llame allí" />
+                <Input label="Persona que recibe" value={s.contacto} onChange={e => cambiarSede(s.id, "contacto", e.target.value)} placeholder="Quién firma allí" />
+              </div>
+            ))}
+            <Btn small variant="secondary" accent={ac} onClick={añadirSede}>+ Añadir sede</Btn>
+          </div>
+
+          <div className="pie-documento">
             <Btn variant="secondary" onClick={() => setModal(false)}>Cancelar</Btn>
             <Btn accent={ac} onClick={guardar}>Guardar</Btn>
           </div>
@@ -2434,8 +3075,16 @@ function ModuloProduccion({ producciones, setProducciones, trabajadoras, setTrab
 }
 
 // ─── APP PRINCIPAL (DISEÑO MODERNO) ─────────────────────────────────────────
-function ModuloAdmin({ proveedores, setProveedores, compras, setCompras, gastos, setGastos, ingredientes, setIngredientes, pedidos, producciones, trabajadoras, irInicio, exportarDatos, importarDatos }) {
+function ModuloAdmin({ proveedores, setProveedores, compras, setCompras, gastos, setGastos, ingredientes, setIngredientes, pedidos, setPedidos, producciones, trabajadoras, empresa, setEmpresa, irInicio, exportarDatos, importarDatos }) {
   const [sub, setSub] = useState("proveedores");
+  const emp = { ...EMPRESA_VACIA, ...(empresa || {}) };
+  const [corte, setCorte] = useState(inicioDeMes);
+  const [confirmarBorrado, setConfirmarBorrado] = useState(false);
+
+  const antiguos = pedidos.filter(p => (p.fecha || "") < corte);
+  const fechas = antiguos.map(p => p.fecha).filter(Boolean).sort();
+  const masViejo = fechas[0];
+  const masNuevo = fechas[fechas.length - 1];
   const ac = ACENTOS.admin;
   return (
     <div>
@@ -2460,6 +3109,76 @@ function ModuloAdmin({ proveedores, setProveedores, compras, setCompras, gastos,
         La copia se guarda en este dispositivo como un archivo. Restaurar sustituye lo
         que haya ahora por lo que traiga el archivo, así que hazte una copia antes.
       </p>
+
+      {/* Datos fiscales de quien vende. Sin esto, cualquier factura sale marcada
+          como proforma: ver FacturaPedido. */}
+      <div style={{ background: BG_CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "15px 16px", marginBottom: 20 }}>
+        <p style={{ margin: "0 0 3px", fontFamily: TIPO_TIT, fontSize: 14, fontWeight: 700, color: MARRON }}>Datos de la empresa</p>
+        <p style={{ margin: "0 0 12px", fontSize: 12.5, color: TEXT_SUB, lineHeight: 1.5 }}>
+          Van en los albaranes y las facturas. Mientras falte el NIF o la dirección,
+          las facturas salen marcadas como <strong>proforma</strong>, sin validez.
+          Confirma con tu gestor el tipo de IVA y si te aplica Verifactu.
+        </p>
+        <Input label="Nombre o razón social" value={emp.nombre}
+          onChange={e => setEmpresa({ ...emp, nombre: e.target.value })} placeholder="Don Pepe Sabor" />
+        <Input label="NIF / CIF" value={emp.nif}
+          onChange={e => setEmpresa({ ...emp, nif: e.target.value })} placeholder="Ej: 12345678Z" />
+        <Input label="Dirección fiscal" value={emp.direccion}
+          onChange={e => setEmpresa({ ...emp, direccion: e.target.value })} placeholder={DIRECCION_LOCAL} />
+        <Input label="Teléfono" value={emp.telefono}
+          onChange={e => setEmpresa({ ...emp, telefono: e.target.value })} placeholder="604 136 371" />
+        <Input label="IVA que llevan los precios dentro (%)" type="number" min="0" step="1" value={emp.iva}
+          onChange={e => setEmpresa({ ...emp, iva: e.target.value })} placeholder="10" />
+        <p style={{ margin: 0, fontSize: 12.5, fontWeight: 700, color: empresaLista(emp) ? "#16a34a" : "#bf7d08" }}>
+          {empresaLista(emp)
+            ? "Completo: las facturas ya no salen como proforma."
+            : "Incompleto: las facturas saldrán marcadas como proforma."}
+        </p>
+      </div>
+
+      {/* Limpieza de pedidos viejos.
+          Borra SOLO los anteriores a la fecha elegida y trabaja sobre la lista
+          que hay en ese momento, así que un pedido que entre mientras tanto no
+          se pierde. Restaurar un archivo sí lo habría borrado. */}
+      <div style={{ background: BG_CARD, border: `1px solid ${BORDER}`, borderRadius: 14, padding: "15px 16px", marginBottom: 20 }}>
+        <p style={{ margin: "0 0 3px", fontFamily: TIPO_TIT, fontSize: 14, fontWeight: 700, color: MARRON }}>Limpiar pedidos antiguos</p>
+        <p style={{ margin: "0 0 12px", fontSize: 12.5, color: TEXT_SUB, lineHeight: 1.5 }}>
+          Borra los pedidos anteriores a la fecha que elijas. Los de ese día en adelante
+          no se tocan, y los que entren mientras tanto tampoco.
+        </p>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <input type="date" value={corte} onChange={e => setCorte(e.target.value)}
+            style={{ background: BG_INPUT, border: `1px solid ${BORDER}`, color: TEXT_MAIN, borderRadius: 10, padding: "9px 12px", fontSize: 13, fontFamily: "inherit" }} />
+          <Btn variant="danger" small onClick={() => antiguos.length && setConfirmarBorrado(true)}>
+            🗑️ Borrar {antiguos.length} pedido{antiguos.length === 1 ? "" : "s"}
+          </Btn>
+        </div>
+        <p style={{ margin: "10px 0 0", fontSize: 12.5, color: antiguos.length ? "#bf7d08" : TEXT_TENUE, fontWeight: antiguos.length ? 700 : 400 }}>
+          {antiguos.length === 0
+            ? "No hay pedidos anteriores a esa fecha."
+            : `Se borrarán ${antiguos.length} pedidos (del ${fechaLegible(masViejo)} al ${fechaLegible(masNuevo)}). Quedarán ${pedidos.length - antiguos.length}.`}
+        </p>
+      </div>
+
+      {confirmarBorrado && (
+        <Modal title="Borrar pedidos antiguos" accent="#b03a2e" onClose={() => setConfirmarBorrado(false)}>
+          <p style={{ color: TEXT_MAIN, fontSize: 15, margin: "0 0 10px", lineHeight: 1.5 }}>
+            Vas a borrar <strong>{antiguos.length} pedidos</strong> anteriores al {fechaLegible(corte)}.
+            Quedarán <strong>{pedidos.length - antiguos.length}</strong>.
+          </p>
+          <p style={{ color: TEXT_SUB, fontSize: 13, margin: "0 0 18px", lineHeight: 1.5 }}>
+            Esto no se puede deshacer. Si no te has hecho una copia de seguridad,
+            cierra esto y hazla antes con el botón de arriba.
+          </p>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <Btn variant="secondary" onClick={() => setConfirmarBorrado(false)}>Cancelar</Btn>
+            <Btn variant="danger" onClick={() => {
+              setPedidos(ps => ps.filter(p => (p.fecha || "") >= corte));
+              setConfirmarBorrado(false);
+            }}>Sí, borrar</Btn>
+          </div>
+        </Modal>
+      )}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 20 }}>
         {TABS_ADMIN.map(t => (
           <button key={t.id} onClick={() => setSub(t.id)} style={{
@@ -2511,7 +3230,7 @@ function cargarLS(key, fallback) {
  * el menú lateral. Todo lo de aquí sale de los pedidos reales: si no hay
  * pedidos, no se inventa nada, se dice que no hay.
  */
-function ModuloBienvenida({ setTab, pedidos, productos }) {
+function ModuloBienvenida({ setTab, pedidos, productos, repartidores }) {
   const hoyISO = hoy();
   const vivos = pedidos.filter(p => p.estado !== "Cancelado");
   const delDia = vivos.filter(p => p.fecha === hoyISO);
@@ -2712,7 +3431,7 @@ function ModuloBienvenida({ setTab, pedidos, productos }) {
               <span style={{ flex: 1, minWidth: 0 }}>
                 <span style={{ display: "block", fontSize: 13.5, fontWeight: 700, color: TEXT_MAIN }}>{p.nombre}</span>
                 <span style={{ display: "block", fontSize: 12, color: TEXT_SUB }}>
-                  {p.rangoHorario ? `${p.rangoHorario} · ` : ""}{quienEntrega(p, [])}
+                  {p.rangoHorario ? `${p.rangoHorario} · ` : ""}{quienEntrega(p, repartidores)}
                 </span>
               </span>
               <span style={{ fontFamily: TIPO_TIT, fontWeight: 800, fontSize: 14, color: VINO }}>{euros(totalesPedido(p).total)}</span>
@@ -2790,6 +3509,8 @@ export default function AppModerno() {
   const [producciones, setProducciones] = useState(() => cargarLS("producciones", PRODUCCIONES_DEMO));
   const [trabajadoras, setTrabajadoras] = useState(() => cargarLS("trabajadoras", TRABAJADORAS_DEMO));
   const [jornadas, setJornadas] = useState(() => cargarLS("jornadas", []));   // mostrador
+  // Datos fiscales de quien vende. Van aparte porque son uno solo, no una lista.
+  const [empresa, setEmpresa] = useState(() => ({ ...EMPRESA_VACIA, ...(cargarLS("empresa", null) || {}) }));
 
   const [listo, setListo] = useState(false);
 
@@ -2809,6 +3530,7 @@ export default function AppModerno() {
   useEffect(() => { if (listo) sync("producciones", producciones); }, [JSON.stringify(producciones)]);
   useEffect(() => { if (listo) sync("trabajadoras", trabajadoras); }, [JSON.stringify(trabajadoras)]);
   useEffect(() => { if (listo) sync("jornadas", jornadas); }, [JSON.stringify(jornadas)]);
+  useEffect(() => { if (listo) sync("empresa", empresa); }, [JSON.stringify(empresa)]);
 
   /**
    * Agenda pública de huecos.
@@ -2843,6 +3565,7 @@ export default function AppModerno() {
       proveedores: setProveedores, compras: setCompras, ingredientes: setIngredientes,
       gastos: setGastos, repartidores: setRepartidores, producciones: setProducciones,
       trabajadoras: setTrabajadoras, jornadas: setJornadas,
+      empresa: (d) => setEmpresa({ ...EMPRESA_VACIA, ...(d || {}) }),
     };
     const claves = Object.keys(destinos);
     let faltan = claves.length;
@@ -2875,7 +3598,7 @@ export default function AppModerno() {
 
 
   const exportarDatos = () => {
-    const datos = { pedidos, clientes, productos, proveedores, compras, ingredientes, gastos, repartidores, producciones, trabajadoras, jornadas, exportado: new Date().toISOString() };
+    const datos = { pedidos, clientes, productos, proveedores, compras, ingredientes, gastos, repartidores, producciones, trabajadoras, jornadas, empresa, exportado: new Date().toISOString() };
     const blob = new Blob([JSON.stringify(datos, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -2910,6 +3633,11 @@ export default function AppModerno() {
       if (!confirm(`Copia del ${fecha}. Se sustituirá lo que hay ahora por: ${resumen}. ¿Continuar?`)) return;
 
       entran.forEach(k => { destinos[k](d[k]); sync(k, d[k]); });
+      // La empresa no es una lista, así que no entra en el bucle de arriba.
+      if (d.empresa && typeof d.empresa === "object" && !Array.isArray(d.empresa)) {
+        const e = { ...EMPRESA_VACIA, ...d.empresa };
+        setEmpresa(e); sync("empresa", e);
+      }
       alert("Copia restaurada.");
     };
     lector.readAsText(archivo);
@@ -2980,15 +3708,15 @@ export default function AppModerno() {
           deja más ancho: en un monitor, 760 px dejaban media pantalla vacía. */}
       <div style={{ paddingLeft: menuFijo ? ANCHO_MENU : 0 }}>
       <div className="main-content" style={{ maxWidth: menuFijo ? 1180 : 760, margin: "0 auto" }} onClickCapture={bloquearClick}>
-        {tab === "inicio" && <ModuloBienvenida setTab={setTab} pedidos={pedidos} productos={productos} />}
-        {tab === "pedidos" && <ModuloPedidos pedidos={pedidos} setPedidos={setPedidos} productos={productos} setProductos={setProductos} clientes={clientes} setClientes={setClientes} repartidores={repartidores} />}
+        {tab === "inicio" && <ModuloBienvenida setTab={setTab} pedidos={pedidos} productos={productos} repartidores={repartidores} />}
+        {tab === "pedidos" && <ModuloPedidos pedidos={pedidos} setPedidos={setPedidos} productos={productos} setProductos={setProductos} clientes={clientes} setClientes={setClientes} repartidores={repartidores} empresa={empresa} />}
         {tab === "clientes" && <ModuloClientes clientes={clientes} setClientes={setClientes} pedidos={pedidos} />}
         {tab === "inventario" && <ModuloInventario productos={productos} setProductos={setProductos} />}
         {tab === "mostrador" && <ModuloMostrador productos={productos} setProductos={setProductos} jornadas={jornadas} setJornadas={setJornadas} />}
         {tab === "stock" && <ModuloStock productos={productos} />}
         {tab === "produccion" && <ModuloProduccion producciones={producciones} setProducciones={setProducciones} trabajadoras={trabajadoras} setTrabajadoras={setTrabajadoras} productos={productos} setProductos={setProductos} />}
         {tab === "personal" && <ModuloPersonal repartidores={repartidores} setRepartidores={setRepartidores} trabajadoras={trabajadoras} setTrabajadoras={setTrabajadoras} />}
-        {tab === "admin" && <ModuloAdmin proveedores={proveedores} setProveedores={setProveedores} compras={compras} setCompras={setCompras} gastos={gastos} setGastos={setGastos} ingredientes={ingredientes} setIngredientes={setIngredientes} pedidos={pedidos} producciones={producciones} trabajadoras={trabajadoras} exportarDatos={exportarDatos} importarDatos={importarDatos} />}
+        {tab === "admin" && <ModuloAdmin proveedores={proveedores} setProveedores={setProveedores} compras={compras} setCompras={setCompras} gastos={gastos} setGastos={setGastos} ingredientes={ingredientes} setIngredientes={setIngredientes} pedidos={pedidos} setPedidos={setPedidos} producciones={producciones} trabajadoras={trabajadoras} empresa={empresa} setEmpresa={setEmpresa} exportarDatos={exportarDatos} importarDatos={importarDatos} />}
       </div>
       </div>
 

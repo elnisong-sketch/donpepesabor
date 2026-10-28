@@ -11,7 +11,7 @@ export const WHATSAPP = '34604136371'
 // Hoja de Google que registra cada pedido (Apps Script).
 export const SHEETS_URL = 'https://script.google.com/macros/s/AKfycbySjQNlkoTT_Wo28xxCKRgk41QvXaECsItCooxiqmwxdn5xNqUORVtHWCX7hhAC8gSY/exec'
 
-export const DIRECCION_LOCAL = 'Calle Berrocal 56, 28021 Madrid'
+export const DIRECCION_LOCAL = 'Calle Berrocal 7, 28021 Madrid'
 /**
  * Lo que cuesta freír una bandeja, según cuántas unidades lleve: las de 25 y 30
  * pagan lo mismo, y la de 50 (hoy solo el tequeño tradicional) paga más porque

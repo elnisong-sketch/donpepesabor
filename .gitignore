@@ -33,3 +33,7 @@ dist-ssr
 *backup*.json
 catalogo-*.json
 precio-*.json
+
+# Fotos de producto en alta resolución: 50 MB que no pintan nada en el
+# repositorio. Van a Drive o a un disco externo.
+Imagenes/

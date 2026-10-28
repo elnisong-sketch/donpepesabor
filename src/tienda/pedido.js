@@ -26,8 +26,25 @@ export function horarioDe(d) {
   return f ? textoFranja(f) : SIN_PREFERENCIA
 }
 
+/**
+ * Referencia de la solicitud, tal como la ve el cliente: S261027-143207.
+ *
+ * S de solicitud, el día en que se pide, y la hora con segundos haciendo de
+ * correlativo. No es un contador de verdad y no pretende serlo: sube a lo largo
+ * del día, vuelve a empezar cada mañana y deja huecos, que son los carritos que
+ * nadie llegó a enviar.
+ *
+ * Un contador de verdad habría que guardarlo en la nube con permiso de escritura
+ * público (la tienda no puede leer los pedidos: son datos de clientes), y eso
+ * cualquiera lo puede inflar y deja al cliente sin número si falla la conexión.
+ * El número bueno —correlativo limpio por día de entrega— lo pone la gestión al
+ * aceptar el pedido: `siguienteCodigo` en pedidos.js.
+ */
 export function nuevoCodigo() {
-  return 'DP-' + String(Math.floor(1000 + Math.random() * 9000))
+  const d = new Date()
+  const dos = (n) => String(n).padStart(2, '0')
+  const dia = `${dos(d.getFullYear() % 100)}${dos(d.getMonth() + 1)}${dos(d.getDate())}`
+  return `S${dia}-${dos(d.getHours())}${dos(d.getMinutes())}${dos(d.getSeconds())}`
 }
 
 export function hoyLocal() {

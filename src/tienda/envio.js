@@ -12,7 +12,8 @@
  */
 
 const ORIGEN_LAT = 40.3381
-const ORIGEN_LON = -3.6752 // Calle Berrocal 56, 28021 Madrid (Butarque, Villaverde)
+const ORIGEN_LON = -3.6752 // Calle Berrocal, 28021 Madrid (Butarque, Villaverde). Es el punto de la calle,
+// no el portal: ningun buscador tiene numeros aqui, y la calle entera mide 300 m.
 
 export const TARIFA_BASE = 6
 export const TEXTO_TARIFAS = 'Hasta 10 km: 6 € · de 10 a 15 km: 8 € · más de 15 km: 10 €'
