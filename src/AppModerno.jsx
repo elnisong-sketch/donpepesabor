@@ -490,7 +490,7 @@ function FormularioPedido({ productos, clientes, repartidores, pedidos, onGuarda
     // hablado con el cliente, normalmente por teléfono. "Pendiente" es para los
     // que llegan de la tienda y hay que revisar. Se puede cambiar aquí abajo.
     rangoHorario: "", fecha: hoy(), estado: "Confirmado", items: [], envio: 0,
-    documento: "Ticket", fiscal: { ...FISCAL_VACIO },
+    nota: "", documento: "Ticket", fiscal: { ...FISCAL_VACIO },
   });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const setFiscal = (k, v) => setForm(f => ({ ...f, fiscal: { ...FISCAL_VACIO, ...f.fiscal, [k]: v } }));
@@ -687,6 +687,16 @@ function FormularioPedido({ productos, clientes, repartidores, pedidos, onGuarda
       <Chips label="Repartidor" accent={ac} options={repartidoresFiltrados.map(r => ({ value: r.id, label: r.nombre }))}
         value={form.repartidorId} onChange={v => set("repartidorId", v)} />
 
+      {/* El comentario del pedido. Lo escribe el cliente en la tienda y se puede
+          corregir o añadir aquí; de aquí sale al ticket, al albarán y a la app
+          del repartidor, que es quien lo necesita delante del portal.
+
+          Antes se perdía: la tienda lo guardaba en `nota` y el ticket leía
+          `notas`, así que un "timbre 3ºB" no llegaba a verlo nadie. */}
+      <Input label="Comentario para la entrega" value={form.nota || ""}
+        onChange={e => set("nota", e.target.value)}
+        placeholder="Timbre 3ºB · llamar al llegar · es un regalo…" />
+
       <SelectorProductos productos={productos} ac={ac} onAgregar={agregarItem} />
 
       {form.items.length > 0 && (
@@ -814,7 +824,9 @@ function TicketPedido({ pedido, repartidores, onCerrar }) {
         <div style={{ borderTop: "1px solid #000", margin: "6px 0" }} />
         <Fila izq="TOTAL" der={euros(total)} fuerte />
         <Fila izq="Pago" der={pedido.formaPago || "-"} />
-        {pedido.notas && <div style={{ marginTop: 6, fontSize: 11 }}>Nota: {pedido.notas}</div>}
+        {/* `nota` es lo que escribe el cliente en la tienda y el dueño en la
+            ficha; `notas` solo lo traen pedidos antiguos. Se miran los dos. */}
+        {(pedido.nota || pedido.notas) && <div style={{ marginTop: 6, fontSize: 11 }}>Nota: {pedido.nota || pedido.notas}</div>}
         <Raya />
         <div style={{ textAlign: "center", fontSize: 11 }}>Gracias por tu pedido</div>
         <div style={{ textAlign: "center", fontSize: 11 }}>donpepesabor-tienda.web.app</div>
@@ -986,7 +998,7 @@ function AlbaranPedido({ pedido, empresa, onCerrar }) {
               Albarán sin valorar. El importe va en la factura.
             </p>}
 
-        {pedido.notas && <p style={{ fontSize: 12, marginTop: 10 }}>Observaciones: {pedido.notas}</p>}
+        {(pedido.nota || pedido.notas) && <p style={{ fontSize: 12, marginTop: 10 }}>Observaciones: {pedido.nota || pedido.notas}</p>}
 
         <p style={{ fontSize: 11, marginTop: 16, color: "#444" }}>
           Este documento acredita la entrega de la mercancía. No es una factura.
@@ -1515,6 +1527,14 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
                       {totalesPedido(p).servicio > 0 && <p style={{ color: "#666", fontSize: 12, margin: "4px 0 0" }}>🔥 Fritura: {totalesPedido(p).servicio.toFixed(2)}€</p>}
                       {totalesPedido(p).envio > 0 && <p style={{ color: "#666", fontSize: 12, margin: "4px 0 0" }}>🚴 Envío: {totalesPedido(p).envio.toFixed(2)}€</p>}
                       <p style={{ color: "#666", fontSize: 12, margin: "4px 0 0" }}>🛵 {quienEntrega(p, repartidores)}</p>
+                      {/* El comentario, a la vista: es lo que hay que leer antes
+                          de salir, no algo que haya que ir a buscar a la ficha. */}
+                      {(p.nota || p.notas) && (
+                        <p style={{ margin: "7px 0 0", padding: "7px 10px", background: BG_APP,
+                          border: `1px solid ${BORDER}`, borderRadius: 9, color: TEXT_MAIN, fontSize: 12.5, lineHeight: 1.45 }}>
+                          📝 {p.nota || p.notas}
+                        </p>
+                      )}
                       <p style={{ color: ac, fontWeight: 800, margin: "6px 0 0", fontSize: 15 }}>Total: {totalesPedido(p).total.toFixed(2)}€</p>
                     </div>
                     <div style={{ display: "flex", gap: 6 }}>

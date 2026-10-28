@@ -257,9 +257,11 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
                         )
                       })}
                     </div>
+                    {/* Aquí NO se promete una llamada antes de salir: el repartidor
+                        va con la ruta hecha y no se pone a llamar casa por casa. Lo
+                        único que se promete es el turno, que es lo que sí se cumple. */}
                     <span className="hint">
-                      Llegamos en algún momento dentro de ese turno, no a una hora
-                      exacta. Te avisamos antes de salir.
+                      La entrega se realizará en la franja horaria seleccionada.
                     </span>
                   </div>
                 )}
@@ -332,7 +334,7 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
                   ))}
                 </div>
                 <div className="field">
-                  <label htmlFor="fNota">Nota (opcional)</label>
+                  <label htmlFor="fNota">Comentario (opcional)</label>
                   <input id="fNota" value={datos.nota} onChange={cambiar('nota')} placeholder="Timbre 3ºB, es para un cumpleaños…" />
                 </div>
               </div>

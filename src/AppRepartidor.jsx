@@ -291,7 +291,7 @@ function HojaRuta({ repartidor, dia, entradas, margen }) {
                   <div style={{ fontWeight: 700 }}>{p.nombre}</div>
                   <div>{direccionDe(p)}</div>
                   {p.telefono && <div>Tel. {p.telefono}</div>}
-                  {p.nota && <div style={{ fontStyle: "italic" }}>Nota: {p.nota}</div>}
+                  {(p.nota || p.notas) && <div style={{ fontStyle: "italic" }}>Nota: {p.nota || p.notas}</div>}
                 </td>
                 <td style={{ padding: "7px 3px", fontSize: 10.5 }}>
                   {(p.items || []).map((it, j) => (
@@ -534,6 +534,14 @@ export default function AppRepartidor() {
             {p.direccion && <div style={{ margin: "0 0 4px" }}><BotonMaps direccion={p.direccion} cp={p.cp} /></div>}
             {p.rangoHorario && <p style={{ margin: "0 0 4px", color: TEXT_SUB, fontSize: 14 }}>🕐 {p.rangoHorario}</p>}
             <p style={{ margin: 0, color: TEXT_SUB, fontSize: 14 }}>📅 {p.fecha}</p>
+            {/* El comentario del cliente: el piso, el timbre, que es un regalo.
+                Es justo lo que hace falta saber delante del portal. */}
+            {(p.nota || p.notas) && (
+              <p style={{ margin: "10px 0 0", padding: "9px 12px", background: BG_APP, borderRadius: 10,
+                border: `1px solid ${BORDER}`, color: TEXT_MAIN, fontSize: 14, lineHeight: 1.45 }}>
+                📝 {p.nota || p.notas}
+              </p>
+            )}
           </div>
 
           <div style={tarjeta}>
@@ -915,6 +923,12 @@ export default function AppRepartidor() {
                           </a>
                         )}
                       </div>
+
+                      {(p.nota || p.notas) && (
+                        <p style={{ margin: "8px 0 0", color: TEXT_MAIN, fontSize: 12.5, lineHeight: 1.45 }}>
+                          📝 {p.nota || p.notas}
+                        </p>
+                      )}
 
                       {/* El aviso que pidió el dueño: salirse de la franja se permite,
                           pero se dice, y con el número delante. */}
