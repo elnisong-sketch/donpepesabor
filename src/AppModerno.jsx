@@ -11,6 +11,10 @@ import { ocupacion, sinReparto, textoFranja, turnosDe } from "./franjas.js";
 // Las fotos y el recargo por freír son los mismos que ve el cliente en la tienda:
 // si se tocan allí, el pedido hecho a mano sigue cuadrando con la web.
 import { costoFrito, fotoDe } from "./tienda/catalogo.js";
+// Los tramos de distancia con los que se cobra el envío son los mismos con los
+// que el informe clasifica las entregas: una sola definición, en envio.js.
+import { TRAMOS_ENVIO, tramoDe } from "./tienda/envio.js";
+import { kilometrosDesdeLaTienda } from "./ruta.js";
 
 // ─── DATOS INICIALES (idénticos a App.jsx) ──────────────────────────────────
 const PRODUCTOS_INICIALES = [];
@@ -33,9 +37,24 @@ const CATEGORIAS_GASTO = ["Limpieza", "Servicios", "Transporte", "Alquiler", "Ot
 const REPARTIDOR_TIENDA_ID = "tienda";
 const REPARTIDORES_INICIALES = [{ id: REPARTIDOR_TIENDA_ID, nombre: "Recoger en Tienda", telefono: "", fijo: true }];
 
-const hoy = () => new Date().toISOString().split("T")[0];
+/**
+ * La fecha en hora local, no en UTC.
+ *
+ * `toISOString()` pasa a UTC, y en España eso devuelve el día de ayer entre
+ * medianoche y las dos de la madrugada en verano. Con el mismo fallo, el
+ * reporte "de este mes" empezaba el último día del mes anterior.
+ */
+const comoISO = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const hoy = () => comoISO(new Date());
 const generarId = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
-const inicioDeMes = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split("T")[0]; };
+const inicioDeMes = () => { const d = new Date(); return comoISO(new Date(d.getFullYear(), d.getMonth(), 1)); };
+
+/** El lunes de esta semana. La semana empieza en lunes, no en domingo. */
+const inicioDeSemana = () => {
+  const d = new Date();
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return comoISO(d);
+};
 
 /**
  * PALETA — la misma que ve el cliente en la tienda (src/tienda/tienda.css).
@@ -2728,7 +2747,7 @@ function ModuloGastos({ gastos, setGastos, irInicio }) {
 }
 
 // ─── MÓDULO: REPORTE HACIENDA ────────────────────────────────────────────────
-function ModuloReporte({ pedidos, compras, gastos, producciones, trabajadoras, irInicio }) {
+function ModuloReporte({ pedidos, setPedidos, compras, gastos, producciones, trabajadoras, repartidores, irInicio }) {
   const ac = ACENTOS.reporte;
   const [desde, setDesde] = useState(inicioDeMes());
   const [hasta, setHasta] = useState(hoy());
@@ -2747,6 +2766,76 @@ function ModuloReporte({ pedidos, compras, gastos, producciones, trabajadoras, i
     categoria: cat, total: gastosRango.filter(g => g.categoria === cat).reduce((s, g) => s + (g.monto || 0), 0)
   })).filter(c => c.total > 0);
 
+  /* ── REPARTO ──────────────────────────────────────────────────────────────
+   * Cuántos pedidos se recogieron en tienda, cuántos se llevaron a domicilio,
+   * quién los llevó y a qué distancia. Los tramos son los mismos con los que se
+   * cobra el envío (TRAMOS_ENVIO), para poder comparar lo cobrado con el tramo.
+   */
+  const [quien, setQuien] = useState("todos");
+  const [midiendo, setMidiendo] = useState(null);   // { hechas, total } mientras mide
+  const [avisoKm, setAvisoKm] = useState("");
+
+  const dePersona = (p) => (quien === "todos" || p.repartidorId === quien);
+  const reparto = pedidosRango.filter(dePersona);
+  const recogidas = reparto.filter(p => p.tipoEntrega === "Recogida");
+  const domicilios = reparto.filter(p => p.tipoEntrega !== "Recogida");
+  const euros = (lista) => lista.reduce((s, p) => s + totalesPedido(p).total, 0);
+
+  // Sin la tienda: una recogida no la "lleva" nadie, y ya está contada arriba.
+  const porRepartidor = (repartidores || [])
+    .filter(r => r.id !== REPARTIDOR_TIENDA_ID)
+    .map(r => {
+      const suyos = pedidosRango.filter(p => p.repartidorId === r.id);
+      return { ...r, pedidos: suyos.length, importe: euros(suyos) };
+    })
+    .filter(r => r.pedidos > 0)
+    .sort((a, b) => b.pedidos - a.pedidos);
+
+  const porTramo = TRAMOS_ENVIO.map(t => {
+    const lista = domicilios.filter(p => tramoDe(p.km)?.id === t.id);
+    return { ...t, pedidos: lista.length, importe: euros(lista), envio: lista.reduce((s, p) => s + (Number(p.envio) || 0), 0) };
+  });
+  // Los pedidos de antes de que se guardara la distancia, y los escritos a mano.
+  const sinMedir = domicilios.filter(p => !Number.isFinite(p.km));
+
+  /**
+   * Rellena los kilómetros que falten, de una vez.
+   *
+   * Solo toca los pedidos que no los tienen: los que ya traen distancia se
+   * quedan como están, que es lo que de verdad se cobró ese día.
+   */
+  const medirLosQueFaltan = async () => {
+    setAvisoKm("");
+    setMidiendo({ hechas: 0, total: 0 });
+    try {
+      const km = await kilometrosDesdeLaTienda(
+        sinMedir.filter(p => p.direccion),
+        (hechas, total) => setMidiendo({ hechas, total }),
+      );
+      const cuantos = Object.keys(km).length;
+      if (!cuantos) {
+        setAvisoKm("No se ha podido situar ninguna de esas direcciones en el mapa.");
+      } else {
+        setPedidos(ps => ps.map(p => (km[p.id] != null ? { ...p, km: km[p.id] } : p)));
+        setAvisoKm(`Medidos ${cuantos} pedido${cuantos === 1 ? "" : "s"}.` +
+          (cuantos < sinMedir.length ? ` ${sinMedir.length - cuantos} se quedan sin medir: la dirección no se encuentra en el mapa.` : ""));
+      }
+    } catch {
+      setAvisoKm("No se ha podido medir ahora mismo. Revisa la conexión e inténtalo otra vez.");
+    } finally {
+      setMidiendo(null);
+    }
+  };
+
+  const Fila = ({ izq, der, sub, fuerte }) => (
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "7px 0", borderBottom: `1px solid ${BORDER}` }}>
+      <span style={{ color: fuerte ? TEXT_MAIN : TEXT_SUB, fontSize: 13.5, fontWeight: fuerte ? 700 : 400 }}>
+        {izq}{sub && <span style={{ display: "block", color: TEXT_TENUE, fontSize: 11.5, fontWeight: 400 }}>{sub}</span>}
+      </span>
+      <span style={{ color: TEXT_MAIN, fontSize: 13.5, fontWeight: 700, whiteSpace: "nowrap" }}>{der}</span>
+    </div>
+  );
+
   const produccionesRango = (producciones || []).filter(p => p.fecha >= desde && p.fecha <= hasta);
   const totalProducido = produccionesRango.reduce((s, p) => s + p.items.reduce((ss, it) => ss + (it.cantidad || 0), 0), 0);
   const statsPorTrab = (trabajadoras || []).map(t => ({
@@ -2758,6 +2847,16 @@ function ModuloReporte({ pedidos, compras, gastos, producciones, trabajadoras, i
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <h2 style={{ color: ac, margin: 0, fontFamily: TIPO_TIT, fontWeight: 800}}>Reporte</h2>
+      </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+        {[
+          { label: "Esta semana", d: inicioDeSemana() },
+          { label: "Este mes", d: inicioDeMes() },
+          { label: "Todo", d: "2000-01-01" },
+        ].map(a => (
+          <Btn key={a.label} small accent={ac} variant={desde === a.d && hasta === hoy() ? "primary" : "ghost"}
+            onClick={() => { setDesde(a.d); setHasta(hoy()); }}>{a.label}</Btn>
+        ))}
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
         <Input label="Desde" type="date" value={desde} onChange={e => setDesde(e.target.value)} />
@@ -2810,7 +2909,63 @@ function ModuloReporte({ pedidos, compras, gastos, producciones, trabajadoras, i
             <p style={{ color: TEXT_MAIN, fontWeight: 800, fontSize: 18, margin: 0 }}>{gastosRango.length}</p>
           </Card>
         </div>
+
+        {/* ── REPARTO ──────────────────────────────────────────────────────── */}
+        <Card accent={ac}>
+          <p style={{ color: TEXT_SUB, fontSize: 12, fontWeight: 800, margin: "0 0 10px" }}>🚚 REPARTO</p>
+
+          <Chips label="Repartidor" accent={ac}
+            options={[{ value: "todos", label: "Todos" },
+              ...(repartidores || []).map(r => ({ value: r.id, label: r.nombre }))]}
+            value={quien} onChange={setQuien} />
+
+          <Fila fuerte izq="Pedidos en el período" der={`${reparto.length} · ${euros(reparto).toFixed(2)}€`} />
+          <Fila izq="🏪 Recogidos en tienda" der={`${recogidas.length} · ${euros(recogidas).toFixed(2)}€`} />
+          <Fila izq="🚚 Llevados a domicilio" der={`${domicilios.length} · ${euros(domicilios).toFixed(2)}€`} />
+
+          {quien === "todos" && porRepartidor.length > 0 && (
+            <>
+              <p style={{ color: TEXT_SUB, fontSize: 11.5, fontWeight: 800, margin: "16px 0 4px", textTransform: "uppercase", letterSpacing: .5 }}>
+                Quién lo llevó
+              </p>
+              {porRepartidor.map(r => (
+                <Fila key={r.id} izq={r.nombre} der={`${r.pedidos} · ${r.importe.toFixed(2)}€`} />
+              ))}
+            </>
+          )}
+
+          <p style={{ color: TEXT_SUB, fontSize: 11.5, fontWeight: 800, margin: "16px 0 4px", textTransform: "uppercase", letterSpacing: .5 }}>
+            A qué distancia (solo domicilio)
+          </p>
+          {porTramo.map(t => (
+            <Fila key={t.id} izq={t.etiqueta} sub={`Tarifa ${t.tarifa}€ · cobrado ${t.envio.toFixed(2)}€`}
+              der={`${t.pedidos} · ${t.importe.toFixed(2)}€`} />
+          ))}
+          {sinMedir.length > 0 && (
+            <Fila izq="Sin distancia medida"
+              sub="Pedidos de antes de que se guardara, o escritos a mano"
+              der={`${sinMedir.length}`} />
+          )}
+        </Card>
       </div>
+
+      {/* Fuera de lo imprimible: es mantenimiento de los datos, no parte del informe. */}
+      {sinMedir.length > 0 && (
+        <Card accent={ac}>
+          <p style={{ color: TEXT_SUB, fontSize: 13, margin: "0 0 10px", lineHeight: 1.5 }}>
+            Hay <strong style={{ color: TEXT_MAIN }}>{sinMedir.length} {sinMedir.length === 1 ? "entrega" : "entregas"}</strong> sin
+            distancia, así que no entran en la clasificación de arriba. Se puede medir ahora:
+            se busca cada dirección en el mapa y se guarda su distancia por carretera desde la tienda.
+            Tarda un rato la primera vez y luego queda hecho.
+          </p>
+          <Btn accent={ac} onClick={medirLosQueFaltan} disabled={!!midiendo} style={{ width: "100%" }}>
+            {midiendo
+              ? (midiendo.total ? `Buscando direcciones (${midiendo.hechas}/${midiendo.total})…` : "Midiendo…")
+              : "📏 Medir los kilómetros que faltan"}
+          </Btn>
+          {avisoKm && <p style={{ color: TEXT_SUB, fontSize: 12.5, margin: "10px 0 0" }}>{avisoKm}</p>}
+        </Card>
+      )}
 
       {totalProducido > 0 && (
         <Card accent={ac}>
@@ -3091,7 +3246,7 @@ function ModuloProduccion({ producciones, setProducciones, trabajadoras, setTrab
 }
 
 // ─── APP PRINCIPAL (DISEÑO MODERNO) ─────────────────────────────────────────
-function ModuloAdmin({ proveedores, setProveedores, compras, setCompras, gastos, setGastos, ingredientes, setIngredientes, pedidos, setPedidos, producciones, trabajadoras, empresa, setEmpresa, irInicio, exportarDatos, importarDatos }) {
+function ModuloAdmin({ proveedores, setProveedores, compras, setCompras, gastos, setGastos, ingredientes, setIngredientes, pedidos, setPedidos, producciones, trabajadoras, repartidores, empresa, setEmpresa, irInicio, exportarDatos, importarDatos }) {
   const [sub, setSub] = useState("proveedores");
   const emp = fusionaEmpresa(empresa);
   const [corte, setCorte] = useState(inicioDeMes);
@@ -3224,7 +3379,7 @@ function ModuloAdmin({ proveedores, setProveedores, compras, setCompras, gastos,
       {sub === "proveedores" && <ModuloProveedores proveedores={proveedores} setProveedores={setProveedores} irInicio={irInicio} />}
       {sub === "compras" && <ModuloCompras compras={compras} setCompras={setCompras} proveedores={proveedores} ingredientes={ingredientes} setIngredientes={setIngredientes} irInicio={irInicio} />}
       {sub === "gastos" && <ModuloGastos gastos={gastos} setGastos={setGastos} irInicio={irInicio} />}
-      {sub === "reporte" && <ModuloReporte pedidos={pedidos} compras={compras} gastos={gastos} producciones={producciones} trabajadoras={trabajadoras} irInicio={irInicio} />}
+      {sub === "reporte" && <ModuloReporte pedidos={pedidos} setPedidos={setPedidos} compras={compras} gastos={gastos} producciones={producciones} trabajadoras={trabajadoras} repartidores={repartidores} irInicio={irInicio} />}
     </div>
   );
 }
@@ -3747,7 +3902,7 @@ export default function AppModerno() {
         {tab === "stock" && <ModuloStock productos={productos} />}
         {tab === "produccion" && <ModuloProduccion producciones={producciones} setProducciones={setProducciones} trabajadoras={trabajadoras} setTrabajadoras={setTrabajadoras} productos={productos} setProductos={setProductos} />}
         {tab === "personal" && <ModuloPersonal repartidores={repartidores} setRepartidores={setRepartidores} trabajadoras={trabajadoras} setTrabajadoras={setTrabajadoras} />}
-        {tab === "admin" && <ModuloAdmin proveedores={proveedores} setProveedores={setProveedores} compras={compras} setCompras={setCompras} gastos={gastos} setGastos={setGastos} ingredientes={ingredientes} setIngredientes={setIngredientes} pedidos={pedidos} setPedidos={setPedidos} producciones={producciones} trabajadoras={trabajadoras} empresa={empresa} setEmpresa={setEmpresa} exportarDatos={exportarDatos} importarDatos={importarDatos} />}
+        {tab === "admin" && <ModuloAdmin proveedores={proveedores} setProveedores={setProveedores} compras={compras} setCompras={setCompras} gastos={gastos} setGastos={setGastos} ingredientes={ingredientes} setIngredientes={setIngredientes} pedidos={pedidos} setPedidos={setPedidos} producciones={producciones} trabajadoras={trabajadoras} repartidores={repartidores} empresa={empresa} setEmpresa={setEmpresa} exportarDatos={exportarDatos} importarDatos={importarDatos} />}
       </div>
       </div>
 

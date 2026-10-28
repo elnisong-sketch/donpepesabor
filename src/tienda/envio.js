@@ -18,11 +18,24 @@ export const ORIGEN_LON = -3.6752 // Calle Berrocal, 28021 Madrid (Butarque, Vil
 export const TARIFA_BASE = 6
 export const TEXTO_TARIFAS = 'Hasta 10 km: 6 € · de 10 a 15 km: 8 € · más de 15 km: 10 €'
 
-export function tarifaPorKm(km) {
-  if (km <= 10) return 6
-  if (km <= 15) return 8
-  return 10
-}
+/**
+ * Los tres tramos de distancia con los que se cobra el envío.
+ *
+ * Están aquí, junto a la tarifa, porque son la misma decisión: si algún día se
+ * cambia dónde empieza a costar más caro, se cambia en un sitio y lo siguen
+ * tanto la tienda al cobrar como el informe de reparto al clasificar.
+ */
+export const TRAMOS_ENVIO = [
+  { id: 'corto', etiqueta: 'Menos de 10 km', hasta: 10, tarifa: 6 },
+  { id: 'medio', etiqueta: 'De 10 a 15 km', hasta: 15, tarifa: 8 },
+  { id: 'largo', etiqueta: 'Más de 15 km', hasta: Infinity, tarifa: 10 },
+]
+
+/** En qué tramo cae una distancia, o null si no hay distancia medida. */
+export const tramoDe = (km) =>
+  Number.isFinite(km) ? TRAMOS_ENVIO.find((t) => km <= t.hasta) : null
+
+export const tarifaPorKm = (km) => (tramoDe(km) || TRAMOS_ENVIO[0]).tarifa
 
 /** Una petición que no puede quedarse colgada: pasados unos segundos, se abandona. */
 async function pedir(url, ms = 7000) {

@@ -275,6 +275,49 @@ async function matrizDeTiempos(puntos) {
 }
 
 /**
+ * Los kilómetros por carretera desde la tienda hasta cada pedido, para los que
+ * no los traen: `{ idDelPedido: 7.4 }`.
+ *
+ * Hacen falta porque durante un tiempo la gestión los descartaba al aceptar el
+ * pedido de la web, y los pedidos escritos a mano nunca los han tenido. Sin
+ * ellos, el informe de reparto no puede decir cuántas entregas fueron de menos
+ * de 10 km, que es justo lo que se cobra distinto.
+ *
+ * Se piden en bloque —una consulta por cada noventa pedidos, no una por
+ * pedido— y son kilómetros de conducir, no en línea recta: es lo que se cobra.
+ * Los que no se puedan situar en el mapa sencillamente no salen en el
+ * resultado, y quien llama los deja como estaban.
+ */
+const PEDIDOS_POR_CONSULTA = 90;
+
+export async function kilometrosDesdeLaTienda(pedidos, alAvanzar) {
+  const puntos = await puntosDe(pedidos, alAvanzar);
+  const situados = pedidos
+    .map((p, i) => ({ p, punto: puntos[i] }))
+    .filter(x => x.punto);
+  const km = {};
+
+  for (let i = 0; i < situados.length; i += PEDIDOS_POR_CONSULTA) {
+    const grupo = situados.slice(i, i + PEDIDOS_POR_CONSULTA);
+    const lista = [{ lat: ORIGEN_LAT, lon: ORIGEN_LON }, ...grupo.map(g => g.punto)]
+      .map(p => `${p.lon},${p.lat}`).join(";");
+    const r = await fetch(
+      `https://router.project-osrm.org/table/v1/driving/${lista}?annotations=distance&sources=0`,
+    );
+    if (!r.ok) throw new Error(`OSRM respondió ${r.status}`);
+    const datos = await r.json();
+    if (datos.code !== "Ok" || !datos.distances?.[0]) throw new Error("OSRM no devolvió distancias");
+    // La fila 0 es la tienda; la columna n+1, el pedido n de este grupo.
+    grupo.forEach((g, n) => {
+      const metros = datos.distances[0][n + 1];
+      if (metros != null) km[g.p.id] = Math.round(metros / 100) / 10;
+    });
+  }
+
+  return km;
+}
+
+/**
  * El orden bueno para un día de reparto.
  *
  * Devuelve, por cada parada, a qué hora se estima que llega y cuántos minutos se
