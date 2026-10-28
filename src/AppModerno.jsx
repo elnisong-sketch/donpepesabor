@@ -22,6 +22,13 @@ const PRODUCTOS_INICIALES = [];
 const CLIENTES_INICIALES = [];
 
 const FORMAS_PAGO = ["Efectivo", "Bizum", "Transferencia", "Tarjeta"];
+
+/**
+ * Un icono por forma de pago, para distinguirlas de un vistazo en la lista sin
+ * tener que leer la palabra. El efectivo lleva el suyo porque es el único que
+ * hay que cuadrar a mano: alguien vuelve con ese dinero encima.
+ */
+const ICONO_PAGO = { Efectivo: "💵", Bizum: "📲", Transferencia: "🏦", Tarjeta: "💳" };
 const ESTADOS_PEDIDO = ["Pendiente", "Confirmado", "En ruta", "Entregado", "Cancelado"];
 // Tonos algo más oscuros que los de antes: sobre el fondo crema, los claros no se leían.
 const ESTADO_COLORS = {
@@ -1502,8 +1509,26 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
                   <p style={{ color: TEXT_SUB, fontSize: 12.5, margin: "2px 0 0" }}>
                     {p.rangoHorario ? `⏰ ${p.rangoHorario}` : "Sin hora"} · {unidades} bandeja{unidades === 1 ? "" : "s"}
                   </p>
-                  {/* Quién lo lleva, sin tener que abrir el pedido. Si falta, se ve. */}
-                  <ChipRepartidor pedido={p} repartidores={repartidores} />
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
+                    {/* Quién lo lleva, sin tener que abrir el pedido. Si falta, se ve. */}
+                    <ChipRepartidor pedido={p} repartidores={repartidores} />
+                    {/* Y cómo se paga. En un día ya entregado es lo que hace falta
+                        para cuadrar lo que entró en efectivo, que es el único que
+                        alguien trae encima. Por eso ese va resaltado. */}
+                    {p.formaPago && (
+                      <span style={{
+                        display: "inline-flex", alignItems: "center", gap: 4, marginTop: 5,
+                        background: p.formaPago === "Efectivo" ? `${MARRON}14` : BG_APP,
+                        border: `1px solid ${p.formaPago === "Efectivo" ? `${MARRON}44` : BORDER}`,
+                        borderRadius: 999, padding: "2px 9px",
+                        fontSize: 11.5, fontWeight: p.formaPago === "Efectivo" ? 800 : 600,
+                        color: p.formaPago === "Efectivo" ? MARRON : TEXT_SUB,
+                        whiteSpace: "nowrap",
+                      }}>
+                        {ICONO_PAGO[p.formaPago] || "💳"} {p.formaPago}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <p style={{ color: ac, fontWeight: 800, margin: "0 0 4px", fontSize: 15 }}>{totalesPedido(p).total.toFixed(2)}€</p>
