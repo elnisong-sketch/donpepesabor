@@ -2314,7 +2314,9 @@ function ModuloPersonal({ repartidores, setRepartidores, trabajadoras, setTrabaj
   const [seccion, setSeccion] = useState("repartidores");
 
   // ── Repartidores ──
-  const acR = ACENTOS.repartidores;
+  // El dorado de Personal: no hay acento "repartidores" y el que no existe deja
+  // la pestaña activa sin color y las fichas sin su franja de la izquierda.
+  const acR = ACENTOS.personal;
   const [modalR, setModalR] = useState(false);
   const [editarR, setEditarR] = useState(null);
   const vacioR = { nombre: "", telefono: "" };

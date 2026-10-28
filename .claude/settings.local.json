@@ -19,7 +19,8 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code} %{size_download} %{content_type}\\\\n\" http://localhost:5188/productos/pan-de-jamon.webp)",
       "Bash(curl -s -o /dev/null -w \"%{http_code} %{size_download}\\\\n\" http://localhost:5188/productos/empanadita-carne.webp)",
       "Bash(sed -i -e 's/const emp = { \\\\.\\\\.\\\\.EMPRESA_VACIA, \\\\.\\\\.\\\\.\\(empresa || {}\\) };/const emp = fusionaEmpresa\\(empresa\\);/' -e 's/useState\\(\\(\\) => \\({ \\\\.\\\\.\\\\.EMPRESA_VACIA, \\\\.\\\\.\\\\.\\(cargarLS\\(\"empresa\", null\\) || {}\\) }\\)\\)/useState\\(\\(\\) => fusionaEmpresa\\(cargarLS\\(\"empresa\", null\\)\\)\\)/' -e 's/empresa: \\(d\\) => setEmpresa\\({ \\\\.\\\\.\\\\.EMPRESA_VACIA, \\\\.\\\\.\\\\.\\(d || {}\\) }\\),/empresa: \\(d\\) => setEmpresa\\(fusionaEmpresa\\(d\\)\\),/' -e 's/const e = { \\\\.\\\\.\\\\.EMPRESA_VACIA, \\\\.\\\\.\\\\.d\\\\.empresa };/const e = fusionaEmpresa\\(d.empresa\\);/' src/AppModerno.jsx)",
-      "Bash(sed -i 's/  DOCUMENTOS, EMPRESA_VACIA, FISCAL_VACIO, desglosaIva, empresaLista,/  DOCUMENTOS, EMPRESA_VACIA, FISCAL_VACIO, desglosaIva, empresaLista, fusionaEmpresa,/' src/AppModerno.jsx)"
+      "Bash(sed -i 's/  DOCUMENTOS, EMPRESA_VACIA, FISCAL_VACIO, desglosaIva, empresaLista,/  DOCUMENTOS, EMPRESA_VACIA, FISCAL_VACIO, desglosaIva, empresaLista, fusionaEmpresa,/' src/AppModerno.jsx)",
+      "Bash(ls -d /d/RESPALDO/Personal/*/ 2>/dev/null | head -40)"
     ]
   },
   "hooks": {
