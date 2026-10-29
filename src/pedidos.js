@@ -65,6 +65,37 @@ export function fechaLegible(iso) {
 /** Dirección del obrador, para los pedidos que recoge el cliente. */
 export const DIRECCION_LOCAL = "Calle Berrocal 7, local 3, 28021 Madrid";
 
+/**
+ * FORMAS DE PAGO, según cómo recibe el pedido el cliente.
+ *
+ * Con tarjeta solo se cobra EN RECOGIDA: el datáfono está en la tienda y el
+ * repartidor no lo lleva encima, así que a domicilio no se puede pagar con
+ * ella. Decisión del dueño el 29/10/2026. El día que el repartidor lleve
+ * datáfono, se borra la condición y vuelve a salir en todas partes.
+ *
+ * La regla vive aquí, y no en la tienda, porque la aplican los tres: la tienda
+ * al pedir, la gestión al apuntar un pedido a mano y el repartidor al cobrar.
+ *
+ * Los pedidos que YA se cobraron con tarjeta no se tocan nunca: la siguen
+ * guardando y enseñando. Para eso están `TODOS_LOS_PAGOS` y `formasPagoDe`.
+ */
+const PAGOS_SIEMPRE = ["Efectivo", "Bizum", "Transferencia"];
+
+export const TODOS_LOS_PAGOS = [...PAGOS_SIEMPRE, "Tarjeta"];
+
+export const pagosDe = (tipoEntrega) =>
+  tipoEntrega === "Recogida" ? [...PAGOS_SIEMPRE, "Tarjeta"] : PAGOS_SIEMPRE;
+
+/**
+ * Las formas que enseñar en la ficha de un pedido concreto: las que valen para
+ * su tipo de entrega, más la suya propia si ya no se ofrece. Sin esto, abrir un
+ * pedido viejo y guardarlo le cambiaría la forma de pago sin avisar.
+ */
+export const formasPagoDe = (tipoEntrega, actual) => {
+  const posibles = pagosDe(tipoEntrega);
+  return !actual || posibles.includes(actual) ? posibles : [...posibles, actual];
+};
+
 /** "2026-10-27" → "261027". La fecha metida dentro del número de pedido. */
 export const fechaCompacta = (iso) => String(iso || "").slice(2).replace(/-/g, "");
 

@@ -1,20 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { db } from "./firebase";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
-import { preparacionDe, totalesPedido, fechaLegible, DIRECCION_LOCAL } from "./pedidos.js";
+import { preparacionDe, totalesPedido, fechaLegible, formasPagoDe, DIRECCION_LOCAL } from "./pedidos.js";
 import { HORA_INICIO } from "./franjas.js";
 import { optimizar, hhmm, MARGEN_POR_DEFECTO, MINUTOS_EN_PUERTA } from "./ruta.js";
 
-/**
- * Formas de pago que se pueden elegir hoy. Las mismas que la gestión y la
- * tienda: tarjeta está retirada desde el 29/10/2026, "por los momentos".
- *
- * Un pedido que ya venga cobrado con tarjeta sí la sigue enseñando, para que
- * el repartidor no se la cambie sin querer al tocar cualquier otra cosa.
- */
-const FORMAS_PAGO = ["Efectivo", "Bizum", "Transferencia"];
-const formasPagoCon = (actual) =>
-  !actual || FORMAS_PAGO.includes(actual) ? FORMAS_PAGO : [...FORMAS_PAGO, actual];
 
 /**
  * PALETA — la misma que la tienda y la gestión (src/AppModerno.jsx).
@@ -626,7 +616,7 @@ export default function AppRepartidor() {
             )}
             <label style={{ color: TEXT_SUB, fontSize: 12, fontWeight: 600, display: "block", marginBottom: 6 }}>Forma de pago</label>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
-              {formasPagoCon(p.formaPago).map(f => (
+              {formasPagoDe(p.tipoEntrega, p.formaPago).map(f => (
                 <button key={f} onClick={() => setCambiosPendientes(c => ({ ...c, formaPago: f }))}
                   style={{ padding: "9px 16px", borderRadius: 20, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
                     background: p.formaPago === f ? VINO : BG_CARD,

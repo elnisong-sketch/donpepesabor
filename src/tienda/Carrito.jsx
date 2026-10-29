@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { getDoc, doc } from 'firebase/firestore'
 import { db } from '../firebase.js'
 import { SIN_PREFERENCIA, huecosEn, sinReparto, textoFranja, turnosDe } from '../franjas.js'
-import { DIRECCION_LOCAL, PAGOS, PREFIJOS, etiquetaPrep, eur, unidades } from './catalogo.js'
+import { DIRECCION_LOCAL, PREFIJOS, etiquetaPrep, eur, unidades } from './catalogo.js'
+import { TODOS_LOS_PAGOS, pagosDe } from '../pedidos.js'
 import { TARIFA_BASE, TEXTO_TARIFAS, calcularEnvio } from './envio.js'
 import {
   conPlazo, fechaLegible, fechaMinima, hoyLocal, irAWhatsapp, nuevoCodigo, porEncargoDe, redactarMensaje, registrarEnNube, totalesDe,
@@ -18,11 +19,11 @@ const CLAVE_DATOS = 'dps_datos_cliente'
 function datosGuardados() {
   try {
     const g = JSON.parse(localStorage.getItem(CLAVE_DATOS) || '{}')
-    // Una forma de pago que ya no se ofrece no se recupera: quien pidió con
-    // tarjeta la tiene guardada en su móvil y volvería a salirle elegida.
+    // Una forma de pago que ya no existe no se recupera. Si existe pero no vale
+    // para la entrega elegida, la suelta el efecto de más abajo.
     return { nombre: g.nombre || '', prefijo: g.prefijo || '34', telefono: g.telefono || '',
              direccion: g.direccion || '', cp: g.cp || '',
-             formaPago: PAGOS.includes(g.formaPago) ? g.formaPago : '' }
+             formaPago: TODOS_LOS_PAGOS.includes(g.formaPago) ? g.formaPago : '' }
   } catch {
     return { nombre: '', prefijo: '34', telefono: '', direccion: '', cp: '', formaPago: '' }
   }
@@ -105,6 +106,18 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
       setDatos((d) => ({ ...d, franja: '' }))
     }
   }, [datos.fechaEntrega, datos.franja])
+
+  /**
+   * Lo mismo con la forma de pago: con tarjeta elegida para recoger en tienda y
+   * un cambio a domicilio, esa tarjeta ya no vale —el datáfono se queda en el
+   * local— y hay que soltarla, o se enviaría un pedido que no se puede cobrar.
+   */
+  const pagos = pagosDe(datos.tipoEntrega)
+  useEffect(() => {
+    if (datos.formaPago && !pagosDe(datos.tipoEntrega).includes(datos.formaPago)) {
+      setDatos((d) => ({ ...d, formaPago: '' }))
+    }
+  }, [datos.tipoEntrega, datos.formaPago])
 
   const envio = domicilio ? (distancia?.tarifa ?? TARIFA_BASE) : 0
   const t = totalesDe(carrito, envio)
@@ -332,7 +345,7 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
               <div className="form-sec">
                 <h4>Forma de pago</h4>
                 <div className="chips">
-                  {PAGOS.map((p) => (
+                  {pagos.map((p) => (
                     <button key={p} className={`chip${datos.formaPago === p ? ' on' : ''}`} onClick={() => poner('formaPago', p)}>{p}</button>
                   ))}
                 </div>

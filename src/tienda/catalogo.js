@@ -25,14 +25,8 @@ export function costoFrito(presentacion) {
   const uds = Number(String(presentacion).match(/\d+/)?.[0])
   return COSTO_FRITO_POR_UNIDADES[uds] ?? COSTO_FRITO_BASE
 }
-/**
- * Formas de pago que se pueden elegir hoy.
- *
- * 'Tarjeta' se quitó el 29/10/2026, por decisión del dueño y "por los
- * momentos": para volver a encenderla, basta con añadirla otra vez aquí. Los
- * pedidos que ya se pagaron con tarjeta siguen guardándola y enseñándola.
- */
-export const PAGOS = ['Bizum', 'Efectivo', 'Transferencia']
+// Las formas de pago viven en ../pedidos.js: las usan también la gestión y la
+// app del repartidor, y la regla tiene que ser una sola para los tres.
 // Cómo se puede pedir cada producto. Solo "Frito" lleva recargo (costoFrito).
 // Los cachitos no tienen opción: se piden tal cual.
 const PREP = {
