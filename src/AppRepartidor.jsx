@@ -149,6 +149,32 @@ function compararDias(a, b) {
 
 const ordenarDias = (dias) => [...dias].sort(compararDias);
 
+/** Cómo se llama un día en la lista: "Hoy", "Mañana" o su fecha. */
+function etiquetaDia(iso) {
+  if (!iso) return "Sin fecha";
+  const manana = new Date();
+  manana.setDate(manana.getDate() + 1);
+  if (iso === hoyISO()) return "Hoy";
+  if (iso === `${manana.getFullYear()}-${String(manana.getMonth() + 1).padStart(2, "0")}-${String(manana.getDate()).padStart(2, "0")}`) return "Mañana";
+  return fechaLegible(iso);
+}
+
+/**
+ * Los pedidos partidos en días, en el orden en que ya vienen.
+ *
+ * No reordena nada: `misPedidos` sale ya ordenado (hoy, lo que viene, y los
+ * atrasados al final), así que basta con cortar cada vez que cambia la fecha.
+ */
+function agruparPorDia(pedidos) {
+  const dias = [];
+  for (const p of pedidos) {
+    const ultimo = dias[dias.length - 1];
+    if (ultimo && ultimo.fecha === p.fecha) ultimo.pedidos.push(p);
+    else dias.push({ fecha: p.fecha, pedidos: [p] });
+  }
+  return dias;
+}
+
 /**
  * El minuto en que empieza la franja de un pedido: "16:00 a 18:00" → 960.
  *
@@ -976,7 +1002,28 @@ export default function AppRepartidor() {
             <p style={{ fontSize: 48, margin: "0 0 12px" }}>📭</p>
             <p style={{ fontSize: 15, color: TEXT_SUB }}>No tienes pedidos asignados</p>
           </div>
-        ) : misPedidos.map(p => {
+        ) : agruparPorDia(misPedidos).map(({ fecha, pedidos: delDia }) => {
+          const atrasado = fecha && fecha < hoyISO();
+          const totalDia = delDia.reduce((s, p) => s + totalesPedido(p).total, 0);
+          return (
+          <div key={fecha || "sin-fecha"} style={{ marginBottom: 22 }}>
+            {/* La cabecera del día. Antes todo iba en una lista seguida y había
+                que mirar pedido por pedido para saber cuál tocaba hoy. */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "0 2px 10px" }}>
+              <span style={{
+                fontFamily: TIPO_TIT, fontWeight: 800, fontSize: 14,
+                textTransform: "uppercase", letterSpacing: ".06em", whiteSpace: "nowrap",
+                color: atrasado ? "#b03a2e" : fecha === hoyISO() ? VINO : MARRON,
+              }}>
+                {atrasado && "⚠️ "}{etiquetaDia(fecha)}
+              </span>
+              <span style={{ flex: 1, height: 1, background: BORDER }} />
+              <span style={{ color: TEXT_SUB, fontSize: 12, whiteSpace: "nowrap" }}>
+                {delDia.length} pedido{delDia.length !== 1 ? "s" : ""} · {eur(totalDia)}
+              </span>
+            </div>
+
+            {delDia.map(p => {
           const total = totalesPedido(p).total;
           const color = ESTADO_COLORS[p.estado] || TEXT_SUB;
           return (
@@ -995,20 +1042,17 @@ export default function AppRepartidor() {
                 <span style={{ background: `${color}1a`, color, border: `1px solid ${color}44`, borderRadius: 20, padding: "3px 10px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap", marginLeft: 8 }}>{p.estado}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                {/* Sin la fecha: ya la dice la cabecera del día, ahí arriba. */}
                 <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                  {/* El día, ahora que la lista va por fechas: sin él no se sabe
-                      si lo de arriba es de hoy o se quedó de la semana pasada. */}
-                  {p.fecha && (
-                    <span style={{ color: p.fecha < hoyISO() ? "#b03a2e" : TEXT_SUB, fontSize: 12, fontWeight: p.fecha === hoyISO() ? 700 : 400 }}>
-                      📅 {p.fecha === hoyISO() ? "Hoy" : fechaLegible(p.fecha)}
-                    </span>
-                  )}
                   {p.rangoHorario && <span style={{ color: TEXT_SUB, fontSize: 12 }}>🕐 {p.rangoHorario}</span>}
                   <span style={{ color: TEXT_SUB, fontSize: 12 }}>💳 {p.formaPago}</span>
                 </div>
                 <span style={{ fontFamily: TIPO_TIT, color: VINO, fontWeight: 800, fontSize: 17 }}>{total.toFixed(2)}€</span>
               </div>
             </button>
+          );
+            })}
+          </div>
           );
         })}
       </div>
