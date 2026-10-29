@@ -4,6 +4,26 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!--
+      INSTALABLE EN EL MÓVIL, y no por capricho.
+
+      Safari borra los datos guardados de cualquier web que no se abra en siete
+      días, y con ellos la sesión: el dueño se encontraba la gestión pidiéndole
+      la contraseña otra vez. A las apps añadidas a la pantalla de inicio no les
+      borra nada, así que lo que arregla el problema es poder instalarla.
+
+      El manifiesto NO lleva `start_url` a propósito: así cada uno arranca donde
+      la añadió. El dueño la añade desde la gestión y le abre la gestión; el
+      repartidor la añade desde ?repartidor y le abre su app. Con un start_url
+      fijo, al repartidor le abriría la pantalla de contraseña de la gestión.
+    -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Don Pepe" />
+    <meta name="theme-color" content="#2a1200" />
     <meta name="description" content="Tequeños, pastelitos y empanadas venezolanas. Pide online con reparto a domicilio en Madrid." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

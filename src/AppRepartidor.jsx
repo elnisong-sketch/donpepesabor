@@ -342,6 +342,15 @@ function HojaRuta({ repartidor, dia, entradas, margen }) {
   );
 }
 
+/**
+ * Quién entró la última vez.
+ *
+ * Sin esto, el repartidor volvía a elegir su nombre y a teclear su móvil cada
+ * vez que abría la app: al salir de una entrega, al volver del mapa, cada
+ * mañana. Ahora entra solo, y para cambiar de persona está el botón de Salir.
+ */
+const CLAVE_SESION = "repartidorSesion";
+
 function cargarLS(key, fallback) {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
 }
@@ -392,6 +401,21 @@ export default function AppRepartidor() {
 
   const activos = repartidores.filter(r => !r.fijo && r.nombre);
 
+  /**
+   * Vuelve a entrar con quien entró la última vez, en cuanto se sabe la lista.
+   *
+   * Se comprueba contra la lista de verdad: si a ese repartidor lo han dado de
+   * baja, o le han quitado el nombre, no entra y le toca elegir otra vez.
+   */
+  useEffect(() => {
+    if (repartidor) return;
+    let id = null;
+    try { id = localStorage.getItem(CLAVE_SESION); } catch { return; }
+    if (!id) return;
+    const suyo = activos.find(r => r.id === id);
+    if (suyo) setRepartidor(suyo);
+  }, [repartidores, repartidor]);
+
   if (cargando) {
     return (
       <div style={{ minHeight: "100vh", background: BG_APP, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: TIPO }}>
@@ -409,6 +433,7 @@ export default function AppRepartidor() {
     const telGuardado = movil(seleccionado?.telefono);
     if (telInput.length === 9 && telInput === telGuardado) {
       setRepartidor(seleccionado);
+      try { localStorage.setItem(CLAVE_SESION, seleccionado.id); } catch { /* sin sitio */ }
       setError("");
     } else {
       setError("Número incorrecto. Inténtalo de nuevo.");
@@ -722,7 +747,12 @@ export default function AppRepartidor() {
       <div style={{ ...cabecera, position: "sticky", top: 0, zIndex: 60 }}>
         <div style={{ maxWidth: 480, margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
           <Marca pie={`${repartidor.nombre} · ${misPedidos.length} pedido${misPedidos.length !== 1 ? "s" : ""}`} />
-          <button onClick={() => { setRepartidor(null); setSeleccionado(null); setTelefono(""); }}
+          {/* Salir es lo único que borra la sesión guardada: es como se cambia
+              de repartidor cuando el móvil lo usa más de uno. */}
+          <button onClick={() => {
+              try { localStorage.removeItem(CLAVE_SESION); } catch { /* da igual */ }
+              setRepartidor(null); setSeleccionado(null); setTelefono("");
+            }}
             style={{ background: "#ffffff1a", border: "1px solid #ffffff2e", color: "#fff", borderRadius: 10, padding: "8px 14px", fontSize: 13, cursor: "pointer", fontWeight: 600, fontFamily: "inherit", flex: "none" }}>
             Salir
           </button>
