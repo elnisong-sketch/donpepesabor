@@ -21,7 +21,21 @@ const PRODUCTOS_INICIALES = [];
 
 const CLIENTES_INICIALES = [];
 
-const FORMAS_PAGO = ["Efectivo", "Bizum", "Transferencia", "Tarjeta"];
+/**
+ * Formas de pago que se pueden elegir hoy.
+ *
+ * "Tarjeta" se quitó el 29/10/2026, por decisión del dueño y "por los
+ * momentos": para volver a encenderla, basta con añadirla otra vez aquí.
+ */
+const FORMAS_PAGO = ["Efectivo", "Bizum", "Transferencia"];
+
+/**
+ * Las formas que enseñar en una ficha, sin tirar la que ese pedido ya tiene.
+ * Un pedido cobrado con tarjeta tiene que poder verse y editarse sin que al
+ * guardar se le cambie sola la forma de pago.
+ */
+const formasPagoCon = (actual) =>
+  !actual || FORMAS_PAGO.includes(actual) ? FORMAS_PAGO : [...FORMAS_PAGO, actual];
 
 /**
  * Un icono por forma de pago, para distinguirlas de un vistazo en la lista sin
@@ -643,7 +657,7 @@ function FormularioPedido({ productos, clientes, repartidores, pedidos, onGuarda
         </div>
       )}
       <Chips label="Tipo de entrega" accent={ac} options={["Domicilio", "Recogida"]} value={form.tipoEntrega} onChange={v => cambiarTipoEntrega(v)} />
-      <Chips label="Forma de pago" accent={ac} options={FORMAS_PAGO} value={form.formaPago} onChange={v => set("formaPago", v)} />
+      <Chips label="Forma de pago" accent={ac} options={formasPagoCon(form.formaPago)} value={form.formaPago} onChange={v => set("formaPago", v)} />
       <Input label="Fecha de entrega" type="date" value={form.fecha} onChange={e => set("fecha", e.target.value)} />
       {form.tipoEntrega === "Domicilio" && sinReparto(form.fecha) && (
         <p style={{ color: "#bf7d08", fontSize: 12.5, fontWeight: 700, margin: "-6px 0 12px" }}>

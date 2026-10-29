@@ -18,8 +18,11 @@ const CLAVE_DATOS = 'dps_datos_cliente'
 function datosGuardados() {
   try {
     const g = JSON.parse(localStorage.getItem(CLAVE_DATOS) || '{}')
+    // Una forma de pago que ya no se ofrece no se recupera: quien pidió con
+    // tarjeta la tiene guardada en su móvil y volvería a salirle elegida.
     return { nombre: g.nombre || '', prefijo: g.prefijo || '34', telefono: g.telefono || '',
-             direccion: g.direccion || '', cp: g.cp || '', formaPago: g.formaPago || '' }
+             direccion: g.direccion || '', cp: g.cp || '',
+             formaPago: PAGOS.includes(g.formaPago) ? g.formaPago : '' }
   } catch {
     return { nombre: '', prefijo: '34', telefono: '', direccion: '', cp: '', formaPago: '' }
   }
