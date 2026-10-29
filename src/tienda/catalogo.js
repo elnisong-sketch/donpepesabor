@@ -82,15 +82,39 @@ export const PROXIMAMENTE = [
 /**
  * Familias que SIEMPRE se hacen por encargo, con su antelación mínima en horas.
  *
- * Los tequeños se congelan y hay existencias; las empanadas, los pastelitos y los
- * cachitos se hornean para cada pedido, así que piden dos días. Esto no depende de
- * la etiqueta de Inventario: aunque nadie la ponga, estas familias piden sus 48 h.
- * Si una bandeja concreta necesita más, la etiqueta manda.
+ * Las empanadas, los pastelitos y los cachitos se hornean para cada pedido, así
+ * que piden dos días. Y desde el 29/10/2026, los tequeños también: del tequeño
+ * solo hay hecho el tradicional, y los demás sabores se preparan al pedirlos.
+ *
+ * Esto no depende de la etiqueta de Inventario: aunque nadie la ponga, estas
+ * familias piden sus 48 h. Si una bandeja concreta necesita más, la etiqueta
+ * manda, porque luego se coge el mayor de los dos.
  */
+
+/**
+ * Los tequeños que SÍ hay hechos y salen sin esperar. Todo lo demás de la
+ * familia pide sus 48 horas.
+ *
+ * Va por lista de lo que NO espera, y no por lista de sabores que sí esperan,
+ * a propósito: el sabor nuevo que se cree en Inventario pide sus 48 h solo, sin
+ * que nadie tenga que acordarse de venir a este archivo. Equivocarse hacia
+ * esperar hace esperar a un cliente; al revés, le prometemos algo que no se
+ * puede hacer.
+ *
+ * El "con orégano y aceite de oliva" NO está aquí: lleva "Tradicionales" en el
+ * nombre, pero cuesta lo mismo que los sabores y se prepara igual.
+ */
+const TEQUENOS_SIN_ESPERA = [/^teque(ñ|n)os\s+tradicionales$/i]
+
+const esTequenoDeEncargo = (p) =>
+  p?.categoria === 'Tequeños' &&
+  !TEQUENOS_SIN_ESPERA.some((r) => r.test((p?.nombre || '').trim()))
+
 const HORAS_POR_FAMILIA = [
   [(p) => p?.categoria === 'Empanadas', 48],
   [(p) => p?.categoria === 'Pastelitos', 48],
   [(p) => /cachito/i.test(p?.nombre || ''), 48],
+  [esTequenoDeEncargo, 48],
 ]
 
 /** Antelación mínima del producto por ser de la familia que es. */
