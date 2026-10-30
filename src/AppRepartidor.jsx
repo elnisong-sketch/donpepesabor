@@ -139,6 +139,32 @@ function etiquetaDia(iso) {
 }
 
 /**
+ * Las bandejas de un día, agrupadas por producto y de más a menos.
+ *
+ * Es lo que el repartidor necesita de un vistazo: qué carga en el coche. El
+ * importe del día no le sirve para nada —él cobra pedido a pedido— y ocupaba
+ * justo este sitio.
+ *
+ * Se agrupa por producto y no por bandeja (25 o 50 unidades) porque lo que se
+ * cuenta son bultos: dos bandejas son dos bandejas se llamen como se llamen.
+ */
+function bandejasPorProducto(pedidos) {
+  const cuenta = new Map();
+  for (const p of pedidos) {
+    for (const it of p.items || []) {
+      const nombre = it.nombreProducto || "Sin nombre";
+      cuenta.set(nombre, (cuenta.get(nombre) || 0) + (Number(it.cantidad) || 0));
+    }
+  }
+  return [...cuenta]
+    .map(([nombre, cantidad]) => ({ nombre, cantidad }))
+    .filter(x => x.cantidad > 0)
+    .sort((a, b) => b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre));
+}
+
+const bandejas = (n) => `${n} bandeja${n === 1 ? "" : "s"}`;
+
+/**
  * Los pedidos partidos en días, en el orden en que ya vienen.
  *
  * No reordena nada: `misPedidos` sale ya ordenado (hoy, lo que viene, y los
@@ -1048,7 +1074,8 @@ export default function AppRepartidor() {
           </div>
         ) : agruparPorDia(misPedidos).map(({ fecha, pedidos: delDia }) => {
           const atrasado = fecha && fecha < hoyISO();
-          const totalDia = delDia.reduce((s, p) => s + totalesPedido(p).total, 0);
+          const carga = bandejasPorProducto(delDia);
+          const totalBandejas = carga.reduce((s, x) => s + x.cantidad, 0);
           return (
           <div key={fecha || "sin-fecha"} style={{ marginBottom: 22 }}>
             {/* La cabecera del día. Antes todo iba en una lista seguida y había
@@ -1063,9 +1090,26 @@ export default function AppRepartidor() {
               </span>
               <span style={{ flex: 1, height: 1, background: BORDER }} />
               <span style={{ color: TEXT_SUB, fontSize: 12, whiteSpace: "nowrap" }}>
-                {delDia.length} pedido{delDia.length !== 1 ? "s" : ""} · {eur(totalDia)}
+                {delDia.length} pedido{delDia.length !== 1 ? "s" : ""}
+                {totalBandejas > 0 && ` · ${bandejas(totalBandejas)}`}
               </span>
             </div>
+
+            {/* Lo que hay que cargar ese día, por producto. */}
+            {carga.length > 0 && (
+              <div style={{ ...tarjeta, padding: "12px 14px", marginBottom: 10, background: BG_APP }}>
+                <p style={{ ...rotulo, margin: "0 0 7px" }}>Qué llevas</p>
+                {carga.map(x => (
+                  <div key={x.nombre} style={{ display: "flex", gap: 9, alignItems: "baseline", padding: "2px 0" }}>
+                    <span style={{ fontFamily: TIPO_TIT, fontWeight: 800, fontSize: 15, color: MARRON,
+                      minWidth: 26, textAlign: "right" }}>{x.cantidad}</span>
+                    <span style={{ color: TEXT_MAIN, fontSize: 13.5, lineHeight: 1.35 }}>
+                      {x.cantidad === 1 ? "bandeja" : "bandejas"} de {x.nombre}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {delDia.map(p => {
           const total = totalesPedido(p).total;
