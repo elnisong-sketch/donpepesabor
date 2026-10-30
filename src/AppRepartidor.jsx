@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { db } from "./firebase";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
-import { preparacionDe, totalesPedido, fechaLegible, formasPagoDe, compararDias, hoyISO, DIRECCION_LOCAL } from "./pedidos.js";
+import { preparacionDe, totalesPedido, fechaLegible, formasPagoDe, bandejasPorProducto, compararDias, hoyISO, DIRECCION_LOCAL } from "./pedidos.js";
 import { HORA_INICIO } from "./franjas.js";
 import { optimizar, hhmm, MARGEN_POR_DEFECTO, MINUTOS_EN_PUERTA } from "./ruta.js";
 
@@ -138,30 +138,8 @@ function etiquetaDia(iso) {
   return fechaLegible(iso);
 }
 
-/**
- * Las bandejas de un día, agrupadas por producto y de más a menos.
- *
- * Es lo que el repartidor necesita de un vistazo: qué carga en el coche. El
- * importe del día no le sirve para nada —él cobra pedido a pedido— y ocupaba
- * justo este sitio.
- *
- * Se agrupa por producto y no por bandeja (25 o 50 unidades) porque lo que se
- * cuenta son bultos: dos bandejas son dos bandejas se llamen como se llamen.
- */
-function bandejasPorProducto(pedidos) {
-  const cuenta = new Map();
-  for (const p of pedidos) {
-    for (const it of p.items || []) {
-      const nombre = it.nombreProducto || "Sin nombre";
-      cuenta.set(nombre, (cuenta.get(nombre) || 0) + (Number(it.cantidad) || 0));
-    }
-  }
-  return [...cuenta]
-    .map(([nombre, cantidad]) => ({ nombre, cantidad }))
-    .filter(x => x.cantidad > 0)
-    .sort((a, b) => b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre));
-}
-
+// El reparto de bandejas por producto vive en pedidos.js: el panel de la
+// gestión enseña exactamente lo mismo, y no pueden decir cosas distintas.
 const bandejas = (n) => `${n} bandeja${n === 1 ? "" : "s"}`;
 
 /**

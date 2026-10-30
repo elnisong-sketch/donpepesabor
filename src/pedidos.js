@@ -65,6 +65,30 @@ export function fechaLegible(iso) {
 /** Dirección del obrador, para los pedidos que recoge el cliente. */
 export const DIRECCION_LOCAL = "Calle Berrocal 7, local 3, 28021 Madrid";
 
+/**
+ * Las bandejas de unos pedidos, agrupadas por producto y de más a menos.
+ *
+ * Es lo que hace falta antes de salir: qué se carga en el coche. Lo usan el
+ * panel del día de la gestión y la lista del repartidor, y tiene que decir lo
+ * mismo en los dos sitios, que si no se discute delante de la furgoneta.
+ *
+ * Se agrupa por producto y no por tamaño de bandeja porque lo que se cuenta
+ * son bultos: dos bandejas son dos bandejas se llamen como se llamen.
+ */
+export function bandejasPorProducto(pedidos = []) {
+  const cuenta = new Map();
+  for (const p of pedidos) {
+    for (const it of p?.items || []) {
+      const nombre = it.nombreProducto || "Sin nombre";
+      cuenta.set(nombre, (cuenta.get(nombre) || 0) + (Number(it.cantidad) || 0));
+    }
+  }
+  return [...cuenta]
+    .map(([nombre, cantidad]) => ({ nombre, cantidad }))
+    .filter((x) => x.cantidad > 0)
+    .sort((a, b) => b.cantidad - a.cantidad || a.nombre.localeCompare(b.nombre));
+}
+
 /** El día de hoy en hora local. En UTC, de madrugada sería todavía ayer. */
 export const hoyISO = () => {
   const d = new Date();

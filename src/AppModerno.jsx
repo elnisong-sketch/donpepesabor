@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { auth, db } from "./firebase";
 import { collection, deleteDoc, doc, onSnapshot, setDoc } from "firebase/firestore";
-import { DIRECCION_LOCAL, bandejasFritas, compararDias, enlaceConfirmacion, fechaLegible, formasPagoDe, pagosDe, preparacionDe, quienEntrega, siguienteCodigo, totalesPedido, whatsappDe } from "./pedidos.js";
+import { DIRECCION_LOCAL, bandejasFritas, bandejasPorProducto, compararDias, enlaceConfirmacion, fechaLegible, formasPagoDe, pagosDe, preparacionDe, quienEntrega, siguienteCodigo, totalesPedido, whatsappDe } from "./pedidos.js";
 import {
   DOCUMENTOS, EMPRESA_VACIA, FISCAL_VACIO, desglosaIva, empresaLista, fusionaEmpresa,
   faltaParaFacturar, mesLegible, pideFiscal, textoDocumento,
@@ -3566,6 +3566,39 @@ function cargarLS(key, fallback) {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
 }
 
+/**
+ * Una lista de "tantas bandejas de tal cosa".
+ *
+ * Las cifras van a dos dígitos —01, 05, 50— para que la columna quede recta y
+ * se puedan comparar de un vistazo sin tener que leerlas una a una.
+ */
+function ListaBandejas({ titulo, carga, fuerte }) {
+  if (!carga.length) return null;
+  return (
+    <div style={{ marginTop: 12 }}>
+      {titulo && (
+        <p style={{ margin: "0 0 4px", fontSize: 11.5, fontWeight: 800, color: fuerte ? MARRON : TEXT_SUB,
+          textTransform: "uppercase", letterSpacing: ".08em" }}>
+          {titulo}
+        </p>
+      )}
+      {carga.map(x => (
+        <div key={x.nombre} style={{ display: "flex", gap: 10, alignItems: "baseline", padding: "3px 0" }}>
+          <span style={{ fontFamily: TIPO_TIT, fontWeight: 800, fontSize: fuerte ? 17 : 15,
+            color: fuerte ? MARRON : TEXT_MAIN, minWidth: 28, textAlign: "right",
+            fontVariantNumeric: "tabular-nums" }}>
+            {String(x.cantidad).padStart(2, "0")}
+          </span>
+          <span style={{ color: fuerte ? TEXT_MAIN : TEXT_SUB, fontSize: 13.5, lineHeight: 1.35,
+            fontWeight: fuerte ? 700 : 400 }}>
+            {x.cantidad === 1 ? "bandeja" : "bandejas"} de {x.nombre}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── MÓDULO: BIENVENIDA ──────────────────────────────────────────────────────
 /**
  * PANEL DEL DÍA — lo primero que se ve al entrar.
@@ -3629,7 +3662,21 @@ function ModuloBienvenida({ setTab, pedidos, productos, repartidores }) {
   const porcentaje = delMes.length ? Math.round((aDomicilio / delMes.length) * 100) : 0;
   const VUELTA = 2 * Math.PI * 44;
   const ticket = delMes.length ? suma(delMes) / delMes.length : 0;
-  const bandejasHoy = delDia.reduce((t, p) => t + (p.items || []).reduce((n, it) => n + (Number(it.cantidad) || 0), 0), 0);
+  /**
+   * Qué sale hoy por la puerta, por producto.
+   *
+   * Cuenta TODO lo del día: lo que se reparte y lo que viene a buscar el
+   * cliente. A la cocina le da igual cómo salga, tiene que prepararlo igual.
+   * El desglose por producto es la misma cuenta que ve el repartidor en su
+   * app, para que no discutan delante de la furgoneta.
+   */
+  const cargaDomicilio = bandejasPorProducto(delDia.filter(p => p.tipoEntrega !== "Recogida"));
+  const cargaMostrador = bandejasPorProducto(delDia.filter(p => p.tipoEntrega === "Recogida"));
+  const cargaHoy = bandejasPorProducto(delDia);
+  const bandejasHoy = cargaHoy.reduce((t, x) => t + x.cantidad, 0);
+  // Las dos columnas solo tienen sentido si hay de las dos: con solo reparto,
+  // el total sería la misma lista escrita dos veces.
+  const hayDeLosDos = cargaDomicilio.length > 0 && cargaMostrador.length > 0;
 
   const Tarjeta = ({ children, ...resto }) => (
     <div style={{ background: BG_CARD, border: `1px solid ${BORDER}`, borderRadius: 16, padding: "16px 18px", ...resto }}>{children}</div>
@@ -3688,6 +3735,29 @@ function ModuloBienvenida({ setTab, pedidos, productos, repartidores }) {
           </button>
         ))}
       </div>
+
+      {/* Qué hay que preparar hoy, desglosado. La cifra de arriba dice cuántas
+          bandejas salen; esto dice de qué, que es lo que se va a la cocina y
+          lo que se carga en el coche. */}
+      {cargaHoy.length > 0 && (
+        <Tarjeta style={{ marginBottom: 14 }}>
+          <Titulo pie={`${bandejasHoy} bandeja${bandejasHoy === 1 ? "" : "s"} en total`}>Qué sale hoy</Titulo>
+
+          {/* Las dos listas van separadas porque las usa gente distinta en
+              momentos distintos: una la lee quien carga la furgoneta y la otra
+              quien deja el montón en el mostrador. Los totales, abajo, son los
+              de la cocina, que lo prepara todo junto sin mirar cómo sale. */}
+          {hayDeLosDos ? (
+            <>
+              <ListaBandejas titulo="🚚 Domicilio" carga={cargaDomicilio} />
+              <ListaBandejas titulo="🏪 Recoger en tienda" carga={cargaMostrador} />
+              <ListaBandejas titulo="Totales" carga={cargaHoy} fuerte />
+            </>
+          ) : (
+            <ListaBandejas carga={cargaHoy} />
+          )}
+        </Tarjeta>
+      )}
 
       {/* Ventas por día */}
       <Tarjeta style={{ marginBottom: 14 }}>
