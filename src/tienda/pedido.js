@@ -99,7 +99,8 @@ export function redactarMensaje(d, items, envio, distancia) {
   if (wa) L.push(`https://wa.me/${wa}`)
   if (d.tipoEntrega === 'Domicilio') {
     const km = distancia?.km ? ` (${distancia.km} km)` : ''
-    L.push(`*Entrega:* 🚚 A domicilio — ${d.direccion || '—'}, ${d.cp || '—'}${km}`)
+    const piso = d.piso?.trim() ? ` (${d.piso.trim()})` : ''
+    L.push(`*Entrega:* 🚚 A domicilio — ${d.direccion || '—'}${piso}, ${d.cp || '—'}${km}`)
     if (distancia?.estado !== 'ok') L.push('⚠️ *Dirección sin comprobar en el mapa: confirmadla antes de salir*')
   } else {
     L.push(`*Entrega:* 🏪 Recogida en ${DIRECCION_LOCAL}`)
@@ -164,6 +165,10 @@ export function paraGestion(d, items, envio, distancia) {
     nombre: d.nombre.trim(),
     telefono: d.telefono.trim(),
     direccion: domicilio ? d.direccion.trim() : '',
+    // El piso va aparte de la calle: al mapa se le pregunta solo por la calle,
+    // y al repartidor hay que decirle el piso bien visible, no escondido al
+    // final de un renglón largo.
+    piso: domicilio ? (d.piso || '').trim() : '',
     cp: domicilio ? d.cp.trim() : '',
     tipoEntrega: d.tipoEntrega,
     formaPago: d.formaPago,
@@ -175,6 +180,17 @@ export function paraGestion(d, items, envio, distancia) {
     // del día sin tener que volver a buscar cada dirección una por una.
     lat: distancia?.lat ?? null,
     lon: distancia?.lon ?? null,
+    /**
+     * Cómo de segura es la dirección. Son dos cosas distintas y por eso van
+     * los dos campos:
+     * - 'ok'         portal encontrado. Todo correcto.
+     * - 'aproximado' el portal no, el código postal sí. EL COBRO ES BUENO; lo
+     *                que no está confirmado es el número del portal, y eso le
+     *                importa al repartidor, no a la dueña.
+     * - 'no'         ni una cosa ni otra. Se cobró tarifa base y puede estar
+     *                mal: esto SÍ hay que mirarlo.
+     */
+    direccionEstado: distancia?.estado || 'sin-revisar',
     direccionComprobada: distancia?.estado === 'ok',
     envio: t.envio,
     servicio: t.fritura,

@@ -28,6 +28,20 @@ const CLIENTES_INICIALES = [];
  * hay que cuadrar a mano: alguien vuelve con ese dinero encima.
  */
 const ICONO_PAGO = { Efectivo: "💵", Bizum: "📲", Transferencia: "🏦", Tarjeta: "💳" };
+
+/**
+ * ¿Hay que mirar la dirección de este pedido?
+ *
+ * Solo cuando el envío pudo cobrarse mal, que es cuando el mapa no situó ni el
+ * portal ni el código postal. Si situó el código postal, el cobro es bueno
+ * —el error son cientos de metros y los tramos son de kilómetros— y no hay
+ * nada que hacer: avisar ahí sería darle una tarea a la dueña por nada.
+ *
+ * Los pedidos anteriores a este campo no traen `direccionEstado`; de esos se
+ * mira el booleano de antes, que es lo único que se sabe de ellos.
+ */
+const avisaDireccion = (p) =>
+  p.direccionEstado ? p.direccionEstado === "no" : p.direccionComprobada === false;
 const ESTADOS_PEDIDO = ["Pendiente", "Confirmado", "En ruta", "Entregado", "Cancelado"];
 // Tonos algo más oscuros que los de antes: sobre el fondo crema, los claros no se leían.
 const ESTADO_COLORS = {
@@ -490,7 +504,7 @@ function SelectorProductos({ productos, ac, onAgregar }) {
 function FormularioPedido({ productos, clientes, repartidores, pedidos, onGuardar, onCerrar, pedidoEditar }) {
   const ac = ACENTOS.pedidos;
   const [form, setForm] = useState(pedidoEditar || {
-    clienteId: "", nombre: "", telefono: "", direccion: "", cp: "",
+    clienteId: "", nombre: "", telefono: "", direccion: "", piso: "", cp: "",
     tipoEntrega: "Domicilio", formaPago: "Efectivo", repartidorId: "",
     // Nace Confirmado: un pedido que escribe el dueño es un pedido que ya está
     // hablado con el cliente, normalmente por teléfono. "Pendiente" es para los
@@ -613,7 +627,10 @@ function FormularioPedido({ productos, clientes, repartidores, pedidos, onGuarda
           options={sedesCliente.map(s => s.nombre || s.direccion)}
           value={form.sede || ""} onChange={elegirSede} />
       )}
-      <Input label="Dirección *" value={form.direccion} onChange={e => set("direccion", e.target.value)} placeholder="Calle, número, piso" />
+      {/* La calle y el número por un lado, el piso por otro: lo que se busca en
+          el mapa es la calle, y meterle el piso la hacía fallar entera. */}
+      <Input label="Dirección *" value={form.direccion} onChange={e => set("direccion", e.target.value)} placeholder="Calle y número" />
+      <Input label="Piso, puerta, escalera" value={form.piso || ""} onChange={e => set("piso", e.target.value)} placeholder="2º E, escalera derecha" />
       <Input label="Código Postal *" value={form.cp} onChange={e => set("cp", e.target.value)} placeholder="28XXX" />
       {/* Qué papel se lleva el cliente. El ticket es lo normal; albarán y factura
           son para negocios y piden los datos de quien compra. */}
@@ -818,7 +835,7 @@ function TicketPedido({ pedido, repartidores, onCerrar }) {
         <Fila izq="Cliente" der={pedido.nombre || "-"} />
         <Fila izq="Telefono" der={pedido.telefono || "-"} />
         {domicilio
-          ? <div style={{ marginTop: 2 }}>Direccion: {pedido.direccion} {pedido.cp}</div>
+          ? <div style={{ marginTop: 2 }}>Direccion: {pedido.direccion}{pedido.piso ? `, ${pedido.piso}` : ""} {pedido.cp}</div>
           : <div style={{ marginTop: 2 }}>RECOGIDA EN TIENDA</div>}
         <Fila izq="Reparto" der={repartidor} />
         <Raya />
@@ -1450,12 +1467,12 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
                 </p>
                 {w.tipoEntrega === "Domicilio" && (
                   <p style={{ color: TEXT_SUB, fontSize: 12.5, margin: "3px 0 0" }}>
-                    📍 {w.direccion} {w.cp}{w.km ? ` · ${w.km} km` : ""}
+                    📍 {w.direccion}{w.piso ? ` · ${w.piso}` : ""} {w.cp}{w.km ? ` · ${w.km} km` : ""}
                   </p>
                 )}
                 {/* La tienda ya no bloquea las direcciones que no sitúa en el mapa:
                     deja pedir y avisa aquí, para confirmarlas antes de salir. */}
-                {w.tipoEntrega === "Domicilio" && w.direccionComprobada === false && (
+                {w.tipoEntrega === "Domicilio" && avisaDireccion(w) && (
                   <p style={{ color: "#bf7d08", fontSize: 12.5, fontWeight: 700, margin: "4px 0 0" }}>
                     ⚠️ Dirección sin comprobar en el mapa · confírmala con el cliente
                   </p>
@@ -1532,6 +1549,23 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
                         {ICONO_PAGO[p.formaPago] || "💳"} {p.formaPago}
                       </span>
                     )}
+                    {/* AVISO SOLO CUANDO HAY QUE HACER ALGO.
+                        Si el mapa situó el código postal, el envío se cobró
+                        bien y aquí no hace falta decir nada: el repartidor ya
+                        ve en su app que el portal está sin confirmar. Solo
+                        salta cuando ni el código postal valió, que es cuando
+                        de verdad hay que llamar al cliente. */}
+                    {p.tipoEntrega === "Domicilio" && avisaDireccion(p)
+                      && p.estado !== "Entregado" && p.estado !== "Cancelado" && (
+                      <span style={{
+                        display: "inline-flex", alignItems: "center", gap: 4, marginTop: 5,
+                        background: "#bf7d0818", border: "1px solid #bf7d0855",
+                        borderRadius: 999, padding: "2px 9px",
+                        fontSize: 11.5, fontWeight: 800, color: "#8a5a08", whiteSpace: "nowrap",
+                      }}>
+                        ⚠️ Dirección sin comprobar
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div style={{ textAlign: "right" }}>
@@ -1545,9 +1579,21 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 8 }}>
                     <div>
                       <p style={{ color: TEXT_SUB, fontSize: 13, margin: "0 0 4px" }}>📞 {p.telefono}</p>
-                      {p.tipoEntrega === "Domicilio" && <p style={{ color: TEXT_SUB, fontSize: 13, margin: "0 0 4px" }}>📍 {p.direccion} {p.cp}</p>}
+                      {p.tipoEntrega === "Domicilio" && (
+                        <p style={{ color: TEXT_SUB, fontSize: 13, margin: "0 0 4px" }}>
+                          📍 {p.direccion} {p.cp}
+                          {p.piso && <span style={{ color: TEXT_MAIN, fontWeight: 700 }}> · {p.piso}</span>}
+                        </p>
+                      )}
                       <p style={{ color: TEXT_SUB, fontSize: 13, margin: "0 0 4px" }}>📅 {p.fecha} {p.rangoHorario && `· ⏰ ${p.rangoHorario}`}</p>
                       <p style={{ color: TEXT_SUB, fontSize: 13, margin: "0 0 6px" }}>💳 {p.formaPago} · {p.tipoEntrega}</p>
+                      {p.tipoEntrega === "Domicilio" && avisaDireccion(p) && (
+                        <p style={{ color: "#8a5a08", background: "#fdf2e3", border: `1px solid ${ORO}66`,
+                          borderRadius: 9, padding: "7px 10px", fontSize: 12.5, fontWeight: 700, margin: "0 0 8px" }}>
+                          ⚠️ El mapa no encontró ni la calle ni el código postal, así que el
+                          envío se cobró a tarifa base y puede estar mal. Confírmala con el cliente.
+                        </p>
+                      )}
                       {p.items?.map((it, i) => (
                         <span key={i} style={{ fontSize: 12, background: BORDER, borderRadius: 8, padding: "3px 9px", marginRight: 4, marginBottom: 4, display: "inline-block", color: TEXT_MAIN }}>
                           {it.cantidad}x {it.nombreProducto} {it.presentacion} ({preparacionDe(it)})
@@ -1764,7 +1810,10 @@ function ModuloRutas({ pedidos }) {
                 <div style={{ background: ac, color: "#fff", borderRadius: "50%", width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 13, flexShrink: 0 }}>{idx + 1}</div>
                 <div style={{ flex: 1 }}>
                   <p style={{ color: TEXT_MAIN, fontWeight: 800, margin: "0 0 4px" }}>{p.nombre}</p>
-                  <p style={{ color: TEXT_SUB, fontSize: 13, margin: "0 0 2px" }}>📍 {p.direccion}, {p.cp}</p>
+                  <p style={{ color: TEXT_SUB, fontSize: 13, margin: "0 0 2px" }}>
+                    📍 {p.direccion}, {p.cp}
+                    {p.piso && <span style={{ color: TEXT_MAIN, fontWeight: 700 }}> · {p.piso}</span>}
+                  </p>
                   <p style={{ color: TEXT_SUB, fontSize: 13, margin: "0 0 4px" }}>⏰ {p.rangoHorario || "Sin horario"} · 💳 {p.formaPago}</p>
                   {p.items?.map((it, i) => (
                     <span key={i} style={{ fontSize: 11, background: "#1f2028", borderRadius: 8, padding: "2px 7px", marginRight: 4, color: TEXT_SUB }}>

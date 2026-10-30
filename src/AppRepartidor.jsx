@@ -189,6 +189,18 @@ function minutoFranja(rangoHorario) {
 const direccionDe = (p) => `${p.direccion}${p.cp ? ", " + p.cp : ""}`;
 
 /**
+ * El portal no está confirmado en el mapa.
+ *
+ * A diferencia de la gestión, aquí SÍ se avisa también cuando solo se situó el
+ * código postal: a la dueña eso no le da trabajo porque el cobro salió bien,
+ * pero el repartidor está delante del número y le conviene saber que ese
+ * número no lo ha visto nadie en el mapa.
+ */
+const portalSinConfirmar = (p) =>
+  p.tipoEntrega !== "Recogida" &&
+  (p.direccionEstado ? p.direccionEstado !== "ok" : p.direccionComprobada === false);
+
+/**
  * El orden sencillo, el que no necesita ni red ni mapas: primero la franja, y
  * dentro de cada franja por código postal, que en Madrid va por zonas y agrupa
  * el barrio. A igual código, lo más cerca de la tienda primero.
@@ -315,6 +327,8 @@ function HojaRuta({ repartidor, dia, entradas, margen }) {
                 <td style={{ padding: "7px 3px" }}>
                   <div style={{ fontWeight: 700 }}>{p.nombre}</div>
                   <div>{direccionDe(p)}</div>
+                  {p.piso && <div style={{ fontWeight: 700 }}>{p.piso}</div>}
+                  {portalSinConfirmar(p) && <div>⚠ Portal sin confirmar en el mapa</div>}
                   {p.telefono && <div>Tel. {p.telefono}</div>}
                   {(p.nota || p.notas) && <div style={{ fontStyle: "italic" }}>Nota: {p.nota || p.notas}</div>}
                 </td>
@@ -582,6 +596,19 @@ export default function AppRepartidor() {
             <p style={{ margin: "0 0 6px", fontSize: 15, fontWeight: 700, color: TEXT_MAIN }}>{p.nombre}</p>
             {p.telefono && <p style={{ margin: "0 0 4px", color: TEXT_SUB, fontSize: 14 }}>📞 {p.telefono}</p>}
             {p.direccion && <div style={{ margin: "0 0 4px" }}><BotonMaps direccion={p.direccion} cp={p.cp} /></div>}
+            {/* El piso, grande y aparte: es lo que se lee delante del portal,
+                con el paquete en la mano. No puede ir en letra pequeña. */}
+            {p.piso && (
+              <p style={{ margin: "0 0 6px", fontSize: 16, fontWeight: 800, color: MARRON }}>🚪 {p.piso}</p>
+            )}
+            {portalSinConfirmar(p) && (
+              <p style={{ margin: "6px 0", padding: "8px 11px", borderRadius: 9,
+                background: "#fdf2e3", border: `1px solid ${ORO}66`, color: "#8a5a08",
+                fontSize: 12.5, fontWeight: 700, lineHeight: 1.45 }}>
+                ⚠️ El número del portal no está confirmado en el mapa. Si al llegar no
+                cuadra, llama al cliente.
+              </p>
+            )}
             {p.rangoHorario && <p style={{ margin: "0 0 4px", color: TEXT_SUB, fontSize: 14 }}>🕐 {p.rangoHorario}</p>}
             <p style={{ margin: 0, color: TEXT_SUB, fontSize: 14 }}>📅 {p.fecha}</p>
             {/* El comentario del cliente: el piso, el timbre, que es un regalo.
@@ -964,6 +991,14 @@ export default function AppRepartidor() {
                         <span style={{ fontFamily: TIPO_TIT, color: VINO, fontWeight: 800, fontSize: 16, whiteSpace: "nowrap" }}>{eur(totalesPedido(p).total)}</span>
                       </div>
                       <div style={{ marginTop: 4 }}><BotonMaps direccion={p.direccion} cp={p.cp} /></div>
+                      {p.piso && (
+                        <p style={{ margin: "4px 0 0", fontSize: 14, fontWeight: 800, color: MARRON }}>🚪 {p.piso}</p>
+                      )}
+                      {portalSinConfirmar(p) && (
+                        <p style={{ margin: "6px 0 0", color: "#8a5a08", fontSize: 12, fontWeight: 700 }}>
+                          ⚠️ Dirección sin confirmar en el mapa
+                        </p>
+                      )}
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 6 }}>
                         <span style={{ color: p.rangoHorario ? TEXT_SUB : TEXT_TENUE, fontSize: 12 }}>
                           🕐 {p.rangoHorario || "Sin hora fija"}
@@ -1067,6 +1102,7 @@ export default function AppRepartidor() {
                 <div>
                   <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: TEXT_MAIN }}>{p.nombre}</p>
                   {p.direccion && <div style={{ marginTop: 3 }}><BotonMaps direccion={p.direccion} cp={p.cp} /></div>}
+                  {p.piso && <p style={{ margin: "3px 0 0", fontSize: 13.5, fontWeight: 800, color: MARRON }}>🚪 {p.piso}</p>}
                 </div>
                 <span style={{ background: `${color}1a`, color, border: `1px solid ${color}44`, borderRadius: 20, padding: "3px 10px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap", marginLeft: 8 }}>{p.estado}</span>
               </div>

@@ -52,6 +52,55 @@ async function pedir(url, ms = 7000) {
 
 const ciudadDe = (p) => p.city || p.town || p.village || p.district || p.county || ''
 
+/**
+ * Trozos de dirección que son el DENTRO del edificio, no el edificio.
+ *
+ * El buscador los toma como parte del nombre de la calle, no encuentra ninguna
+ * que se llame así y devuelve cero resultados. Pasó de verdad el 29/10/2026 con
+ * "Avenida de la constitución 39, piso 2, escalera derecha, puerta E, 28821":
+ * cero resultados en los dos buscadores, la tienda cobró la tarifa base de 6 €
+ * y el reparto era a Coslada, a 18,5 km, que son 10 €.
+ */
+const DENTRO_DEL_EDIFICIO = new RegExp(
+  '^\\s*(' +
+  'pisos?|planta|puertas?|pta|escaleras?|esc|bajo|bj|portal|local|oficina|' +
+  'letra|izquierda|izqda|izq|derecha|dcha|der|[aá]tico|entresuelo|' +
+  '\\d{0,3}\\s*[ºª]|' +          // "3º", "2ª"
+  '\\d{1,3}\\s*[a-záéíóúñ]\\s*$' + // "1 A", "2B": piso y puerta sin la "º"
+  ')', 'i')
+
+/**
+ * Lo que va al final pegado y tampoco es la calle: "3ºB", "bajo", "ático".
+ *
+ * Un número suelto al final NO se quita: "Calle Mayor, 10" es como mucha gente
+ * escribe el número del portal, y quitárselo dejaría la calle sin número.
+ */
+const COLA_DEL_EDIFICIO = /\s+(\d{0,3}\s*[ºª]\s*[a-z]?|bajo|bj|[aá]tico|entresuelo)\s*$/i
+
+/**
+ * La dirección tal como hay que BUSCARLA en el mapa: la calle y el número, sin
+ * el piso, la escalera ni la puerta.
+ *
+ * Lo que se guarda en el pedido sigue siendo lo que escribió el cliente,
+ * enterito: el repartidor necesita el piso para llamar al timbre. Esto es solo
+ * para preguntarle al mapa, que de puertas para adentro no sabe nada.
+ *
+ * Se corta en la primera coma que ya habla del interior, y si no hay comas se
+ * le quita la cola. Si no queda nada aprovechable, se busca lo que vino, que es
+ * como se hacía antes y peor no va a salir.
+ */
+export function direccionParaBuscar(direccion) {
+  const partes = String(direccion || '').split(',')
+  const calle = []
+  for (const p of partes) {
+    if (DENTRO_DEL_EDIFICIO.test(p)) break
+    calle.push(p)
+  }
+  if (!calle.length) return String(direccion || '').trim()
+  const limpia = calle.join(',').replace(COLA_DEL_EDIFICIO, '').trim()
+  return limpia || String(direccion || '').trim()
+}
+
 /** Distancia en línea recta desde la tienda, solo para ordenar candidatos. */
 function lejania(c) {
   const dx = (c.lon - ORIGEN_LON) * 84
@@ -92,6 +141,19 @@ async function buscarEnPhoton(direccion, cp) {
   }))
 }
 
+/** Dónde cae un código postal, sin calle: el punto central de esa zona. */
+async function buscarZona(cp) {
+  const datos = await pedir('https://photon.komoot.io/api/?' + new URLSearchParams({
+    q: `${cp}, España`, limit: '5', lat: String(ORIGEN_LAT), lon: String(ORIGEN_LON),
+  }))
+  return (datos.features || []).map((f) => ({
+    lat: f.geometry.coordinates[1],
+    lon: f.geometry.coordinates[0],
+    cp: f.properties.postcode || '',
+    ciudad: ciudadDe(f.properties),
+  }))
+}
+
 async function buscarEnNominatim(direccion, cp) {
   const datos = await pedir('https://nominatim.openstreetmap.org/search?' + new URLSearchParams({
     street: direccion, postalcode: cp, countrycodes: 'es',
@@ -120,7 +182,9 @@ async function kmHasta(lat, lon) {
  * diferencia que importa en los dos sitios: lo primero se avisa, lo segundo se
  * reintenta luego.
  */
-export async function situar(direccion, cp) {
+export async function situar(direccionCompleta, cp) {
+  // Al mapa se le pregunta por la calle y el número, nunca por el piso.
+  const direccion = direccionParaBuscar(direccionCompleta)
   let alguienRespondio = false
   let candidatos = []
 
@@ -139,23 +203,45 @@ export async function situar(direccion, cp) {
   if (!alguienRespondio) return { estado: 'sin-revisar', sitio: null }
 
   const sitio = elegir(candidatos, cp)
-  return { estado: sitio ? 'ok' : 'no', sitio }
+  if (sitio) return { estado: 'ok', sitio }
+
+  /**
+   * ÚLTIMO INTENTO: el código postal a secas.
+   *
+   * Si la calle no aparece —mal escrita, recién abierta, o el mapa no la
+   * tiene— el código postal todavía sitúa el pedido en su zona. Para cobrar
+   * basta de sobra: los tramos son de 10 y 15 km y un código postal mide mucho
+   * menos. Medido en seis zonas (Coslada, centro, Usera, Getafe, Móstoles y
+   * Chamartín), la diferencia iba de 200 m a 1,2 km y la tarifa salía la misma
+   * en las seis.
+   *
+   * Esto es lo que evita el fallo del 29/10/2026: un reparto a Coslada cobrado
+   * a 6 € cuando eran 10. Ojo, arregla EL DINERO, no la dirección: el portal
+   * sigue sin confirmar y por eso el estado es 'aproximado' y no 'ok'.
+   */
+  try {
+    const zona = (await buscarZona(cp)).find((c) => c.cp === cp)
+    if (zona) return { estado: 'aproximado', sitio: zona }
+  } catch { /* ni con el código postal; se devuelve 'no' */ }
+
+  return { estado: 'no', sitio: null }
 }
 
 /**
  * Devuelve siempre un objeto con `estado`:
- * - 'ok':          dirección encontrada, con km, tarifa y coordenadas.
- * - 'no':          no se ha podido situar en el mapa. AVISA, pero NO bloquea.
- * - 'sin-revisar': no se pudo preguntar (sin red o servicio caído); se deja pedir.
+ * - 'ok':          portal encontrado. Km y tarifa exactos.
+ * - 'aproximado':  el portal no, pero el código postal sí. Km y tarifa BUENOS
+ *                  (el error es de cientos de metros), dirección por confirmar.
+ * - 'no':          ni el portal ni el código postal. Tarifa base y a confirmar.
+ * - 'sin-revisar': no se pudo preguntar (sin red o servicio caído).
  *
- * Ninguno de los tres impide pedir. Antes 'no' dejaba el botón muerto y había
- * clientes que no podían comprar; perder un pedido es peor que llevar una
- * dirección por confirmar, que se arregla con un mensaje de WhatsApp.
+ * Ninguno impide pedir. Antes 'no' dejaba el botón muerto y había clientes que
+ * no podían comprar; perder un pedido es peor que llevar una dirección por
+ * confirmar, que se arregla con un mensaje de WhatsApp.
  *
- * Las coordenadas se devuelven SIEMPRE que se haya encontrado el portal, aunque
- * falle el cálculo de los kilómetros: el repartidor las necesita para ordenar la
- * ruta, y una cosa no tiene que ver con la otra. Antes se calculaban y se
- * tiraban, y luego había que volver a preguntarlas una por una.
+ * Las coordenadas se devuelven SIEMPRE que se haya situado algo, aunque falle
+ * el cálculo de los kilómetros: el repartidor las necesita para ordenar la
+ * ruta, y una cosa no tiene que ver con la otra.
  */
 export async function calcularEnvio(direccion, cp) {
   const { estado, sitio } = await situar(direccion, cp)
@@ -165,7 +251,9 @@ export async function calcularEnvio(direccion, cp) {
   try {
     const km = await kmHasta(sitio.lat, sitio.lon)
     if (km == null) return { estado: 'sin-revisar', tarifa: TARIFA_BASE, ...punto }
-    return { estado: 'ok', km: Math.round(km * 10) / 10, tarifa: tarifaPorKm(km), ...punto }
+    // Con el código postal el cobro es bueno, pero la dirección sigue sin
+    // confirmar: se conserva 'aproximado' para que la gestión lo marque.
+    return { estado, km: Math.round(km * 10) / 10, tarifa: tarifaPorKm(km), ...punto }
   } catch {
     return { estado: 'sin-revisar', tarifa: TARIFA_BASE, ...punto }
   }

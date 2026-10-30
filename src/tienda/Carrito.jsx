@@ -22,10 +22,10 @@ function datosGuardados() {
     // Una forma de pago que ya no existe no se recupera. Si existe pero no vale
     // para la entrega elegida, la suelta el efecto de más abajo.
     return { nombre: g.nombre || '', prefijo: g.prefijo || '34', telefono: g.telefono || '',
-             direccion: g.direccion || '', cp: g.cp || '',
+             direccion: g.direccion || '', piso: g.piso || '', cp: g.cp || '',
              formaPago: TODOS_LOS_PAGOS.includes(g.formaPago) ? g.formaPago : '' }
   } catch {
-    return { nombre: '', prefijo: '34', telefono: '', direccion: '', cp: '', formaPago: '' }
+    return { nombre: '', prefijo: '34', telefono: '', direccion: '', piso: '', cp: '', formaPago: '' }
   }
 }
 
@@ -123,25 +123,39 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
   const t = totalesDe(carrito, envio)
   const bandejas = carrito.reduce((s, l) => s + l.cantidad, 0)
 
+  /**
+   * Lo que falta para poder enviar el pedido: el texto Y el campo culpable.
+   *
+   * El campo hace falta para pintarlo: antes solo se decía "Escribe el código
+   * postal" abajo del todo, y con el formulario entero delante no se sabía
+   * dónde había que escribirlo. Ahora ese campo se marca en rojo.
+   *
+   * Va de uno en uno, en el orden en que se rellena el formulario: se señala
+   * solo el primero que bloquea, no todos a la vez.
+   */
   const falta = useMemo(() => {
-    if (!carrito.length) return 'Añade al menos un producto'
-    if (!datos.fechaEntrega) return 'Elige el día de entrega'
-    if (datos.fechaEntrega < minFecha) return `${encargo} necesita 48 h: elige el ${fechaLegible(minFecha)} o un día posterior`
-    if (domicilio && sinReparto(datos.fechaEntrega)) return 'Los domingos no repartimos: elige otro día o pásate a recogerlo'
+    const no = (campo, texto) => ({ campo, texto })
+    if (!carrito.length) return no('', 'Añade al menos un producto')
+    if (!datos.fechaEntrega) return no('fecha', 'Elige el día de entrega')
+    if (datos.fechaEntrega < minFecha) return no('fecha', `${encargo} necesita 48 h: elige el ${fechaLegible(minFecha)} o un día posterior`)
+    if (domicilio && sinReparto(datos.fechaEntrega)) return no('fecha', 'Los domingos no repartimos: elige otro día o pásate a recogerlo')
     // Ya no hay "me da igual la hora": o mañana o tarde. Un pedido sin turno no
     // ocupaba hueco en la agenda y acababa descuadrándola.
-    if (turnos.length && !datos.franja) return 'Elige si lo quieres por la mañana o por la tarde'
-    if (datos.franja && domicilio && huecosEn(agenda, datos.fechaEntrega, datos.franja) <= 0) return 'Ese turno se acaba de llenar: elige el otro'
-    if (!datos.nombre.trim()) return 'Escribe tu nombre'
-    if (!tel) return 'Escribe tu teléfono'
-    if (!telOk) return 'Revisa el teléfono: faltan o sobran números'
-    if (domicilio && !datos.direccion.trim()) return 'Escribe la dirección de entrega'
-    if (domicilio && !datos.cp.trim()) return 'Escribe el código postal'
-    if (domicilio && !cpMadrid) return 'Solo repartimos en Madrid (código postal 28xxx)'
-    if (domicilio && direccion === 'buscando') return 'Comprobando la dirección…'
-    if (!datos.formaPago) return 'Elige la forma de pago'
-    return ''
+    if (turnos.length && !datos.franja) return no('franja', 'Elige si lo quieres por la mañana o por la tarde')
+    if (datos.franja && domicilio && huecosEn(agenda, datos.fechaEntrega, datos.franja) <= 0) return no('franja', 'Ese turno se acaba de llenar: elige el otro')
+    if (!datos.nombre.trim()) return no('nombre', 'Escribe tu nombre')
+    if (!tel) return no('telefono', 'Escribe tu teléfono')
+    if (!telOk) return no('telefono', 'Revisa el teléfono: faltan o sobran números')
+    if (domicilio && !datos.direccion.trim()) return no('direccion', 'Escribe la calle y el número')
+    if (domicilio && !datos.cp.trim()) return no('cp', 'Falta el código postal: la dirección tiene que estar completa')
+    if (domicilio && !cpMadrid) return no('cp', 'Solo repartimos en Madrid (código postal 28xxx)')
+    if (domicilio && direccion === 'buscando') return no('', 'Comprobando la dirección…')
+    if (!datos.formaPago) return no('pago', 'Elige la forma de pago')
+    return null
   }, [carrito, datos, domicilio, cpMadrid, tel, telOk, minFecha, encargo, direccion])
+
+  /** Clase del campo que está bloqueando el pedido, para pintarlo. */
+  const pendiente = (campo) => (falta?.campo === campo ? ' pendiente' : '')
 
   const mensaje = useMemo(
     () => redactarMensaje({ ...datos, telefono: telefonoCompleto, codigo }, carrito, envio, distancia),
@@ -161,8 +175,8 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
     if (falta || enviando) return
     setEnviando(true)
     try {
-      const { nombre, prefijo, telefono, direccion, cp, formaPago } = datos
-      localStorage.setItem(CLAVE_DATOS, JSON.stringify({ nombre, prefijo, telefono, direccion, cp, formaPago }))
+      const { nombre, prefijo, telefono, direccion, piso, cp, formaPago } = datos
+      localStorage.setItem(CLAVE_DATOS, JSON.stringify({ nombre, prefijo, telefono, direccion, piso, cp, formaPago }))
     } catch { /* en modo privado no se puede guardar; da igual */ }
     /**
      * El pedido entra en la gestión y, acto seguido, se abre WhatsApp con el
@@ -285,11 +299,12 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
 
               <div className="form-sec">
                 <h4>Tus datos</h4>
-                <div className="field">
+                <div className={`field${pendiente('nombre')}`}>
                   <label htmlFor="fNom">Nombre y apellido</label>
                   <input id="fNom" value={datos.nombre} onChange={cambiar('nombre')} placeholder="María García" autoComplete="name" />
+                  {falta?.campo === 'nombre' && <span className="aviso-campo">{falta.texto}</span>}
                 </div>
-                <div className="field">
+                <div className={`field${pendiente('telefono')}`}>
                   <label htmlFor="fTel">Teléfono (WhatsApp)</label>
                   <div className="tel">
                     {/* Cerrado muestra solo bandera y prefijo; al abrirlo, la lista con los países. */}
@@ -305,18 +320,26 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
                       placeholder={datos.prefijo === '34' ? '612 345 678' : 'Número sin el prefijo'}
                       inputMode="tel" autoComplete="tel-national" />
                   </div>
+                  {falta?.campo === 'telefono' && <span className="aviso-campo">{falta.texto}</span>}
                 </div>
                 {domicilio && (
                   <>
-                    <div className="field">
+                    <div className={`field${pendiente('direccion')}`}>
+                      {/* El piso va en su propia casilla: aquí solo la calle y
+                          el número, que es lo único que el mapa sabe buscar. */}
                       <label htmlFor="fDir">Dirección de entrega</label>
-                      <input id="fDir" value={datos.direccion} onChange={cambiar('direccion')} placeholder="Calle, número, piso…" autoComplete="street-address" />
+                      <input id="fDir" value={datos.direccion} onChange={cambiar('direccion')} placeholder="Calle y número" autoComplete="street-address" />
+                      {falta?.campo === 'direccion' && <span className="aviso-campo">{falta.texto}</span>}
                     </div>
                     <div className="field">
+                      <label htmlFor="fPiso">Piso, puerta, escalera <small>(opcional)</small></label>
+                      <input id="fPiso" value={datos.piso} onChange={cambiar('piso')} placeholder="2º E, escalera derecha" />
+                    </div>
+                    <div className={`field${pendiente('cp')}`}>
                       <label htmlFor="fCp">Código postal</label>
                       <input id="fCp" value={datos.cp} onChange={cambiar('cp')} placeholder="28001" inputMode="numeric" maxLength={5} autoComplete="postal-code" />
+                      {falta?.campo === 'cp' && <span className="aviso-campo">{falta.texto}</span>}
                     </div>
-                    {datos.cp.trim().length === 5 && !cpMadrid && <p className="hint warn">Solo repartimos en Madrid (código postal 28xxx).</p>}
                     {cpMadrid && (
                       <>
                         <div className={`envio-box${direccion === 'ok' ? '' : ' pendiente'}`}>
@@ -370,7 +393,7 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
         </div>
 
         <div className="dr-foot">
-          {carrito.length > 0 && falta && <div className="falta">{falta}</div>}
+          {carrito.length > 0 && falta && <div className="falta">{falta.texto}</div>}
           <button className="btn-wa" disabled={Boolean(falta) || enviando} onClick={finalizar}>
             <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 00-8.6 15.1L2 22l5-1.3A10 10 0 1012 2zm0 18.2a8.2 8.2 0 01-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1112 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 01-3.3-2.9c-.3-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 00-.7.3 3 3 0 00-.9 2.2 5.2 5.2 0 001.1 2.7 11.8 11.8 0 004.5 4c1.7.7 2.4.8 3.2.6a2.8 2.8 0 001.8-1.3 2.3 2.3 0 00.2-1.3c-.1-.1-.3-.2-.5-.3z" /></svg>
             {enviando ? 'Preparando…' : 'Enviar pedido por WhatsApp'}
