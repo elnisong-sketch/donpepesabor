@@ -397,7 +397,7 @@ const precioFinalItem = (it, productosRef) => {
  * añadir la línea: el precio de la bandeja, el recargo por freír y la comisión. Es
  * lo que permite los precios pactados con un cliente sin tocar el inventario.
  */
-function SelectorProductos({ productos, ac, onAgregar }) {
+function SelectorProductos({ productos, ac, onAgregar, onPendiente }) {
   const [abierto, setAbierto] = useState(null);     // producto desplegado
   const [item, setItem] = useState(null);           // lo que se está configurando
 
@@ -431,6 +431,18 @@ function SelectorProductos({ productos, ac, onAgregar }) {
   const prodAbierto = productos.find(p => String(p.id) === String(abierto));
   const tarifa = item ? precioTarifa(item, productos) : 0;
   const unitario = item ? precioFinalItem(item, productos) : 0;
+
+  /**
+   * Se le dice al formulario qué hay elegido pero SIN añadir.
+   *
+   * Todo lo que se configura aquí —bandeja, cantidad, precio— vive solo dentro
+   * de este componente hasta que se pulsa "Añadir al pedido". Quien elegía el
+   * producto y le daba directo a Guardar perdía la línea entera y se guardaba
+   * un pedido de 0 bandejas y 0,00 €. Pasó el 30/10/2026.
+   */
+  useEffect(() => {
+    onPendiente?.(item && prodAbierto ? prodAbierto.nombre : null);
+  }, [item, prodAbierto, onPendiente]);
 
   return (
     <div style={{ background: "#101015", borderRadius: 14, padding: 14, marginBottom: 14, border: `1px solid ${ac}22` }}>
@@ -516,6 +528,30 @@ function FormularioPedido({ productos, clientes, repartidores, pedidos, onGuarda
   const setFiscal = (k, v) => setForm(f => ({ ...f, fiscal: { ...FISCAL_VACIO, ...f.fiscal, [k]: v } }));
   const fiscal = { ...FISCAL_VACIO, ...(form.fiscal || {}) };
   const falta = form.documento === "Factura" ? faltaParaFacturar(fiscal) : [];
+
+  // Lo que hay elegido en el selector y todavía sin añadir, si es que hay algo.
+  const [sinAñadir, setSinAñadir] = useState(null);
+
+  /**
+   * LO QUE UN PEDIDO NECESITA PARA SER UN PEDIDO.
+   *
+   * Antes el botón de Guardar solo miraba que una factura llevara el NIF: con
+   * el formulario en blanco se guardaba igual. Así entró un pedido de 0
+   * bandejas y 0,00 € que no servía para nada y encima contaba en el informe.
+   *
+   * El teléfono y la dirección solo se exigen a domicilio: para una recogida
+   * basta con el nombre, que el cliente viene él.
+   */
+  const faltanDatos = [];
+  if (!String(form.nombre || "").trim()) faltanDatos.push("el nombre del cliente");
+  if (form.tipoEntrega === "Domicilio") {
+    if (!String(form.telefono || "").trim()) faltanDatos.push("el teléfono");
+    if (!String(form.direccion || "").trim()) faltanDatos.push("la dirección");
+    if (!String(form.cp || "").trim()) faltanDatos.push("el código postal");
+  }
+  if (!form.items.length) faltanDatos.push("añadir algún producto");
+
+  const noSePuedeGuardar = falta.length > 0 || faltanDatos.length > 0;
 
   // Huecos ya ocupados. El pedido que se está editando no se cuenta a sí mismo.
   const agendaForm = useMemo(
@@ -725,7 +761,17 @@ function FormularioPedido({ productos, clientes, repartidores, pedidos, onGuarda
         onChange={e => set("nota", e.target.value)}
         placeholder="Timbre 3ºB · llamar al llegar · es un regalo…" />
 
-      <SelectorProductos productos={productos} ac={ac} onAgregar={agregarItem} />
+      <SelectorProductos productos={productos} ac={ac} onAgregar={agregarItem} onPendiente={setSinAñadir} />
+
+      {/* El caso que de verdad pasa: se elige el producto y se va directo a
+          Guardar sin pulsar "Añadir al pedido", y la línea se pierde. */}
+      {sinAñadir && (
+        <p style={{ background: "#fdf2e3", border: `1px solid ${ORO}66`, borderRadius: 10,
+          color: "#8a5a08", fontSize: 13, fontWeight: 700, padding: "10px 12px", margin: "-6px 0 14px" }}>
+          ⚠️ Tienes <strong>{sinAñadir}</strong> elegido pero sin añadir. Pulsa
+          «Añadir al pedido» ahí arriba o se perderá.
+        </p>
+      )}
 
       {form.items.length > 0 && (
         <div style={{ marginBottom: 14 }}>
@@ -758,11 +804,23 @@ function FormularioPedido({ productos, clientes, repartidores, pedidos, onGuarda
       )}
 
       <Chips label="Estado del pedido" accent={ESTADO_COLORS[form.estado]} options={ESTADOS_PEDIDO} value={form.estado} onChange={v => set("estado", v)} />
+      {/* Qué falta, dicho con todas las letras y antes del botón, para no tener
+          que adivinar por qué está apagado. */}
+      {faltanDatos.length > 0 && (
+        <p style={{ background: "#fdeaea", border: "1px solid #9c2a2a33", borderRadius: 10,
+          color: "#9c2a2a", fontSize: 13, fontWeight: 700, padding: "10px 12px", margin: "12px 0 0" }}>
+          Para guardar el pedido falta {faltanDatos.length === 1 ? faltanDatos[0]
+            : faltanDatos.slice(0, -1).join(", ") + " y " + faltanDatos[faltanDatos.length - 1]}.
+        </p>
+      )}
+
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
         <Btn variant="secondary" onClick={onCerrar}>Cancelar</Btn>
-        <Btn accent={ac} disabled={falta.length > 0}
+        <Btn accent={ac} disabled={noSePuedeGuardar}
           onClick={() => {
-            if (falta.length > 0) return;   // una factura sin NIF no le sirve a nadie
+            // Una factura sin NIF no le sirve a nadie, y un pedido sin
+            // productos tampoco: ni se cobra, ni se prepara, ni se reparte.
+            if (noSePuedeGuardar) return;
             onGuardar({ ...form, fiscal, id: form.id || generarId(), total });
           }}>Guardar Pedido</Btn>
       </div>
