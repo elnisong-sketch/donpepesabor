@@ -1437,7 +1437,21 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
    * ficha del cliente y descuenta stock). Después se quita de la bandeja, que es
    * lo que evita que se vuelva a colar dos veces.
    */
+  /**
+   * Pedidos de la bandeja que se están aceptando ahora mismo.
+   *
+   * SIN ESTO SE DUPLICAN PEDIDOS, y pasó el 30/10/2026: tres copias idénticas
+   * del mismo cliente en la lista. Al pulsar Aceptar, el pedido entra en la
+   * lista al instante pero la tarjeta verde no se va hasta que la nube
+   * confirma el borrado, un segundo o dos con mala cobertura. En ese rato
+   * sigue ahí, verde y pulsable; quien no ve reacción vuelve a pulsar, y cada
+   * pulsación crea un pedido nuevo con su propio número.
+   */
+  const [aceptando, setAceptando] = useState([]);
+
   const aceptarWeb = (w) => {
+    if (aceptando.includes(w._id)) return;
+    setAceptando(a => [...a, w._id]);
     // `km`, `lat` y `lon` se quedan: son los que luego ordenan la ruta del
     // reparto. Antes se descartaban aquí y el repartidor salía a ciegas.
     const { _id, creado, codigo, ...datos } = w;
@@ -1452,8 +1466,14 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
       repartidorId: datos.tipoEntrega === "Recogida" ? REPARTIDOR_TIENDA_ID : "",
       total: totalesPedido(datos).total,
     });
-    deleteDoc(doc(db, "pedidosWeb", _id)).catch(() =>
-      alert("El pedido se ha añadido, pero sigue en la bandeja: descártalo a mano cuando haya conexión."));
+    deleteDoc(doc(db, "pedidosWeb", _id)).catch(() => {
+      // Se suelta el freno: si el borrado falló, la tarjeta se queda y hay que
+      // poder volver a intentarlo. El pedido ya está en la lista, así que
+      // quien lo reintente tendrá que borrar el duplicado, pero al menos no
+      // se queda con un botón muerto para siempre.
+      setAceptando(a => a.filter(x => x !== _id));
+      alert("El pedido se ha añadido, pero sigue en la bandeja: descártalo a mano cuando haya conexión.");
+    });
   };
 
   const eliminar = (id) => { if (confirm("¿Eliminar pedido?")) setPedidos(p => p.filter(x => x.id !== id)); };
@@ -1552,8 +1572,14 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
                 ))}
                 {w.nota && <p style={{ color: TEXT_SUB, fontSize: 12.5, margin: "5px 0 0", fontStyle: "italic" }}>📝 {w.nota}</p>}
                 <div style={{ display: "flex", gap: 6, marginTop: 9 }}>
-                  <Btn small variant="success" onClick={() => aceptarWeb(w)}>✓ Aceptar</Btn>
-                  <Btn small variant="danger" onClick={() => descartarWeb(w)}>✕ Descartar</Btn>
+                  {/* Mientras se acepta, el botón se apaga y lo dice: sin eso,
+                      la tarjeta tarda en irse y se pulsa dos y tres veces. */}
+                  <Btn small variant="success" disabled={aceptando.includes(w._id)}
+                    onClick={() => aceptarWeb(w)}>
+                    {aceptando.includes(w._id) ? "Aceptando…" : "✓ Aceptar"}
+                  </Btn>
+                  <Btn small variant="danger" disabled={aceptando.includes(w._id)}
+                    onClick={() => descartarWeb(w)}>✕ Descartar</Btn>
                 </div>
               </div>
             );
