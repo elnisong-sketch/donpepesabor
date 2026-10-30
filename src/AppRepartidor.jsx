@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { db } from "./firebase";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
-import { preparacionDe, totalesPedido, fechaLegible, formasPagoDe, DIRECCION_LOCAL } from "./pedidos.js";
+import { preparacionDe, totalesPedido, fechaLegible, formasPagoDe, compararDias, hoyISO, DIRECCION_LOCAL } from "./pedidos.js";
 import { HORA_INICIO } from "./franjas.js";
 import { optimizar, hhmm, MARGEN_POR_DEFECTO, MINUTOS_EN_PUERTA } from "./ruta.js";
 
@@ -124,28 +124,8 @@ const movil = (t) => String(t || "").replace(/\D/g, "").slice(-9);
  * mitad de reparto, que es el día en que de verdad hace falta.
  */
 
-/** "YYYY-MM-DD" de hoy en hora local. En UTC, a las 23:00 ya sería mañana. */
-function hoyISO() {
-  const d = new Date();
-  const dos = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}`;
-}
-
-/**
- * El criterio de la casa para ordenar días de reparto: hoy primero, después lo
- * que viene en orden, y al final los atrasados, del más reciente al más viejo.
- *
- * Un pedido de ayer sin entregar no se esconde —hay que verlo— pero tampoco se
- * pone por delante del reparto de hoy, que es lo que hay que sacar ahora.
- */
-function compararDias(a, b) {
-  const hoy = hoyISO();
-  const grupo = (f) => (!f ? 2 : f >= hoy ? 0 : 1);
-  if (grupo(a) !== grupo(b)) return grupo(a) - grupo(b);
-  if (grupo(a) === 1) return String(b).localeCompare(String(a));
-  return String(a).localeCompare(String(b));
-}
-
+// El orden de los días (hoy primero, luego lo que viene, y los atrasados al
+// final) vive en pedidos.js: es el mismo que usa la gestión.
 const ordenarDias = (dias) => [...dias].sort(compararDias);
 
 /** Cómo se llama un día en la lista: "Hoy", "Mañana" o su fecha. */

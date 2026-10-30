@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { auth, db } from "./firebase";
 import { collection, deleteDoc, doc, onSnapshot, setDoc } from "firebase/firestore";
-import { DIRECCION_LOCAL, bandejasFritas, enlaceConfirmacion, fechaLegible, formasPagoDe, pagosDe, preparacionDe, quienEntrega, siguienteCodigo, totalesPedido, whatsappDe } from "./pedidos.js";
+import { DIRECCION_LOCAL, bandejasFritas, compararDias, enlaceConfirmacion, fechaLegible, formasPagoDe, pagosDe, preparacionDe, quienEntrega, siguienteCodigo, totalesPedido, whatsappDe } from "./pedidos.js";
 import {
   DOCUMENTOS, EMPRESA_VACIA, FISCAL_VACIO, desglosaIva, empresaLista, fusionaEmpresa,
   faltaParaFacturar, mesLegible, pideFiscal, textoDocumento,
@@ -1417,15 +1417,18 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
 
   const filtrados = pedidos
     .filter(p => (filtroEstado === "Todos" || p.estado === filtroEstado) && (!filtroFecha || p.fecha === filtroFecha))
-    // Lo que hay que cocinar antes, arriba: hoy primero, luego mañana, y así.
-    // Un pedido sin fecha no tiene prisa conocida: al final, no estorbando los de hoy.
+    // HOY arriba del todo, después lo que viene, y los días atrasados al final
+    // (`compararDias`, en pedidos.js, la misma regla que usa el repartidor).
+    // Antes era un orden por fecha a secas y ayer salía por encima de hoy.
+    // Dentro de cada día: por estado, y después por turno de entrega.
     .sort((a, b) =>
-      String(a.fecha || "9999-99-99").localeCompare(String(b.fecha || "9999-99-99")) ||
+      compararDias(a.fecha, b.fecha) ||
       ESTADOS_PEDIDO.indexOf(a.estado) - ESTADOS_PEDIDO.indexOf(b.estado) ||
       String(a.rangoHorario || "~").localeCompare(String(b.rangoHorario || "~"))
     );
 
-  // Los pedidos se agrupan por día de entrega, del más próximo al más lejano.
+  // Los días salen en el orden en que se metieron, que es el de `filtrados`:
+  // las claves de texto de un objeto se recorren según se añadieron.
   const porFecha = filtrados.reduce((grupos, p) => {
     const dia = p.fecha || "Sin fecha";
     (grupos[dia] = grupos[dia] || []).push(p);

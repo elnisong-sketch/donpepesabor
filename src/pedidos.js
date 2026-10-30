@@ -65,6 +65,35 @@ export function fechaLegible(iso) {
 /** Dirección del obrador, para los pedidos que recoge el cliente. */
 export const DIRECCION_LOCAL = "Calle Berrocal 7, local 3, 28021 Madrid";
 
+/** El día de hoy en hora local. En UTC, de madrugada sería todavía ayer. */
+export const hoyISO = () => {
+  const d = new Date();
+  const dos = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${dos(d.getMonth() + 1)}-${dos(d.getDate())}`;
+};
+
+/**
+ * EL ORDEN DE LOS DÍAS DE ENTREGA, el mismo para la gestión y el repartidor.
+ *
+ * HOY SIEMPRE PRIMERO. Después lo que viene, en orden. Y al final los días que
+ * ya pasaron con algo sin entregar, del más reciente al más viejo.
+ *
+ * Ordenar por fecha a secas ponía ayer por encima de hoy, y lo primero que se
+ * ve al abrir la pantalla tiene que ser lo que hay que sacar ahora. Un pedido
+ * atrasado hay que verlo, pero abajo: ya no se puede hacer nada con él a
+ * tiempo, y arriba solo despista.
+ *
+ * Los pedidos sin fecha van los últimos de todos: no tienen prisa conocida.
+ */
+export function compararDias(a, b) {
+  const hoy = hoyISO();
+  const grupo = (f) => (!f ? 3 : f === hoy ? 0 : f > hoy ? 1 : 2);
+  const ga = grupo(a), gb = grupo(b);
+  if (ga !== gb) return ga - gb;
+  if (ga === 2) return String(b).localeCompare(String(a));  // atrasados: el más reciente primero
+  return String(a || "").localeCompare(String(b || ""));
+}
+
 /**
  * FORMAS DE PAGO, según cómo recibe el pedido el cliente.
  *
