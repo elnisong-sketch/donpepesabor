@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { auth, db } from "./firebase";
+import { EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
 import { collection, deleteDoc, doc, onSnapshot, setDoc } from "firebase/firestore";
 import { DIRECCION_LOCAL, bandejasFritas, bandejasPorProducto, compararDias, enlaceConfirmacion, fechaLegible, formasPagoDe, pagosDe, preparacionDe, quienEntrega, siguienteCodigo, totalesPedido, whatsappDe } from "./pedidos.js";
 import {
@@ -11,6 +12,9 @@ import { ocupacion, sinReparto, textoFranja, turnosDe } from "./franjas.js";
 // Las fotos y el recargo por freír son los mismos que ve el cliente en la tienda:
 // si se tocan allí, el pedido hecho a mano sigue cuadrando con la web.
 import { costoFrito, fotoDe } from "./tienda/catalogo.js";
+// El mensaje por defecto del cartel vive con el cartel, para que lo que se ve
+// de ejemplo aquí sea exactamente lo que verá el cliente si no se escribe otro.
+import { MENSAJE_POR_DEFECTO } from "./tienda/Mantenimiento.jsx";
 // Los tramos de distancia con los que se cobra el envío son los mismos con los
 // que el informe clasifica las entregas: una sola definición, en envio.js.
 import { TRAMOS_ENVIO, tramoDe } from "./tienda/envio.js";
@@ -3481,6 +3485,8 @@ function ModuloAdmin({ proveedores, setProveedores, compras, setCompras, gastos,
         </p>
       </div>
 
+      <CerrarTienda />
+
       {/* Limpieza de pedidos viejos.
           Borra SOLO los anteriores a la fecha elegida y trabaja sobre la lista
           que hay en ese momento, así que un pedido que entre mientras tanto no
@@ -3564,6 +3570,108 @@ const TABS_ADMIN = [
 
 function cargarLS(key, fallback) {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
+}
+
+/**
+ * CERRAR LA TIENDA AL PÚBLICO.
+ *
+ * Cuando la producción no da abasto, lo que hay que parar son los pedidos
+ * nuevos: un pedido aceptado y no entregado sale más caro que uno no hecho.
+ * Esto apaga la tienda entera —el cliente ve un cartel con el logo y nada
+ * más— sin tocar nada de lo que ya está en marcha.
+ *
+ * PIDE LA CONTRASEÑA cada vez, la del correo con el que se ha entrado. No es
+ * por desconfianza: es un botón que deja a la empresa sin vender, y no puede
+ * dispararse por un roce en el móvil. Se comprueba contra Firebase
+ * (`reauthenticateWithCredential`), así que vale la de verdad y solo esa; aquí
+ * no se guarda ninguna contraseña ni se compara con nada escrito en el código.
+ */
+function CerrarTienda() {
+  const ac = ACENTOS.admin;
+  const [ajustes, setAjustes] = useState(null);   // null = todavía cargando
+  const [modal, setModal] = useState(false);
+  const [clave, setClave] = useState("");
+  const [mensaje, setMensaje] = useState("");
+  const [error, setError] = useState("");
+  const [guardando, setGuardando] = useState(false);
+
+  useEffect(() => onSnapshot(doc(db, "datos", "ajustes"), (snap) => {
+    const v = snap.exists() ? (JSON.parse(snap.data().valor) || {}) : {};
+    setAjustes(v);
+    setMensaje(v.mensaje || "");
+  }, () => setAjustes({})), []);
+
+  const cerrada = !!ajustes?.cerrada;
+
+  const confirmar = async () => {
+    setError("");
+    if (!clave) { setError("Escribe tu contraseña"); return; }
+    setGuardando(true);
+    try {
+      const usuario = auth.currentUser;
+      await reauthenticateWithCredential(
+        usuario, EmailAuthProvider.credential(usuario.email, clave));
+      await setDoc(doc(db, "datos", "ajustes"), {
+        valor: JSON.stringify({ ...ajustes, cerrada: !cerrada, mensaje: mensaje.trim() }),
+      });
+      setModal(false); setClave("");
+    } catch (e) {
+      setError(e?.code === "auth/too-many-requests"
+        ? "Demasiados intentos. Espera unos minutos."
+        : "Contraseña incorrecta.");
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <div style={{ background: cerrada ? "#fdeaea" : BG_CARD, border: `1px solid ${cerrada ? "#9c2a2a44" : BORDER}`,
+      borderRadius: 14, padding: "15px 16px", marginBottom: 20 }}>
+      <p style={{ margin: "0 0 3px", fontFamily: TIPO_TIT, fontSize: 14, fontWeight: 700, color: cerrada ? "#9c2a2a" : MARRON }}>
+        {cerrada ? "🔴 La tienda está CERRADA al público" : "La tienda está abierta"}
+      </p>
+      <p style={{ margin: "0 0 12px", fontSize: 12.5, color: TEXT_SUB, lineHeight: 1.5 }}>
+        {cerrada
+          ? "Quien entre en la web ve un cartel de mantenimiento y no puede pedir. Los pedidos que ya están en la lista no se tocan."
+          : "Si la producción no da abasto, aquí se cierra la web y deja de entrar trabajo nuevo. Lo que ya está aceptado sigue igual."}
+      </p>
+
+      <label style={{ display: "block", color: TEXT_SUB, fontSize: 12, marginBottom: 6, fontWeight: 600 }}>
+        Mensaje que verá el cliente
+      </label>
+      <textarea value={mensaje} onChange={e => setMensaje(e.target.value)} rows={3}
+        placeholder={MENSAJE_POR_DEFECTO}
+        style={{ width: "100%", background: BG_INPUT, border: `1.5px solid ${BORDER}`, borderRadius: 10,
+          color: TEXT_MAIN, padding: "11px 14px", fontSize: 14, fontFamily: "inherit", boxSizing: "border-box",
+          outline: "none", resize: "vertical", marginBottom: 12 }} />
+
+      <Btn accent={ac} variant={cerrada ? "success" : "danger"} onClick={() => { setModal(true); setError(""); setClave(""); }}
+        style={{ width: "100%" }} disabled={ajustes === null}>
+        {ajustes === null ? "Cargando…" : cerrada ? "🟢 Volver a abrir la tienda" : "🔴 Cerrar la tienda al público"}
+      </Btn>
+
+      {modal && (
+        <Modal title={cerrada ? "Abrir la tienda" : "Cerrar la tienda"} accent={ac} onClose={() => setModal(false)}>
+          <p style={{ color: TEXT_SUB, fontSize: 13.5, lineHeight: 1.55, margin: "0 0 16px" }}>
+            {cerrada
+              ? "La web volverá a aceptar pedidos inmediatamente."
+              : "Nadie podrá hacer pedidos nuevos en la web hasta que la vuelvas a abrir. Los pedidos que ya tienes no se tocan."}
+            {" "}Escribe tu contraseña para confirmarlo.
+          </p>
+          <Input label={`Contraseña de ${auth.currentUser?.email || "tu cuenta"}`} type="password"
+            value={clave} autoFocus onChange={e => { setClave(e.target.value); setError(""); }}
+            onKeyDown={e => e.key === "Enter" && !guardando && confirmar()} />
+          {error && <p style={{ color: "#b3261e", fontSize: 13, fontWeight: 700, margin: "-6px 0 12px" }}>{error}</p>}
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <Btn variant="secondary" onClick={() => setModal(false)}>Cancelar</Btn>
+            <Btn accent={ac} variant={cerrada ? "success" : "danger"} disabled={guardando} onClick={confirmar}>
+              {guardando ? "Comprobando…" : cerrada ? "Sí, abrir" : "Sí, cerrar"}
+            </Btn>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
 }
 
 /**

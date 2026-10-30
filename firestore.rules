@@ -32,6 +32,20 @@ service cloud.firestore {
     }
 
     /**
+     * Ajustes que la tienda necesita saber antes de enseñarse, hoy solo uno:
+     * si está cerrada por mantenimiento y con qué mensaje.
+     *
+     * Lectura pública porque lo tiene que leer un cliente sin cuenta, y no hay
+     * nada privado dentro. Escribir, solo la gestión: y además, al otro lado
+     * del botón se pide la contraseña otra vez, que cerrar la tienda no es
+     * algo que deba pasar por tocar sin querer.
+     */
+    match /datos/ajustes {
+      allow read: if true;
+      allow write: if autorizado();
+    }
+
+    /**
      * Bandeja de entrada de los pedidos hechos en la tienda.
      *
      * Cualquiera puede DEJAR un pedido (la tienda es pública y el cliente no tiene

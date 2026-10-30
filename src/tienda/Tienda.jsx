@@ -5,11 +5,14 @@ import { DIRECCION_LOCAL, PROXIMAMENTE, estadoProducto, eur, fotoDe, precioDesde
 import { totalesDe } from './pedido.js'
 import Ficha from './Ficha.jsx'
 import Carrito from './Carrito.jsx'
+import Mantenimiento from './Mantenimiento.jsx'
 import './tienda.css'
 
 export default function Tienda() {
   const [productos, setProductos] = useState(null)
   const [error, setError] = useState(false)
+  // null mientras no se sabe; luego { cerrada, mensaje }.
+  const [ajustes, setAjustes] = useState(null)
 
   const [filtro, setFiltro] = useState('Todos')
   const [ficha, setFicha] = useState(null)
@@ -21,6 +24,20 @@ export default function Tienda() {
     getDoc(doc(db, 'datos', 'productos'))
       .then((snap) => setProductos(snap.exists() ? aLaVenta(JSON.parse(snap.data().valor)) : []))
       .catch(() => setError(true))
+  }, [])
+
+  /**
+   * ¿Está la tienda cerrada por mantenimiento?
+   *
+   * Se lee aparte del catálogo y ANTES de pintar nada, para que nadie vea la
+   * tienda un segundo y luego el cartel: en ese segundo da tiempo a pulsar un
+   * producto. Si la consulta falla, se abre: quedarse sin vender por un fallo
+   * de red sería peor que el problema que esto resuelve.
+   */
+  useEffect(() => {
+    getDoc(doc(db, 'datos', 'ajustes'))
+      .then((snap) => setAjustes(snap.exists() ? (JSON.parse(snap.data().valor) || {}) : {}))
+      .catch(() => setAjustes({}))
   }, [])
 
   // Con el carrito o la ficha abiertos, la página de fondo no se desplaza.
@@ -53,6 +70,10 @@ export default function Tienda() {
     setAviso(`${linea.nombre} añadido`)
     setTimeout(() => setAviso(''), 2200)
   }
+
+  // Hasta saber si está cerrada no se enseña nada: ni la tienda ni el cartel.
+  if (ajustes === null) return null
+  if (ajustes.cerrada) return <Mantenimiento mensaje={ajustes.mensaje} />
 
   return (
     <div className="dps">

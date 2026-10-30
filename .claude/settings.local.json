@@ -31,7 +31,9 @@
       "Bash(node -e ' *)",
       "Bash(node \"C:/Users/Usuario/AppData/Local/Temp/claude/D--RESPALDO-Personal-DonPepeSabor/a0c9bc3a-a1e4-4dcd-9e2d-6b004de38108/scratchpad/iconos.mjs\")",
       "Bash(node limpiar.mjs)",
-      "Bash(python -)"
+      "Bash(python -)",
+      "Bash(npx -y firebase-tools deploy --only firestore:rules,hosting)",
+      "Bash(npx -y firebase-tools deploy --only firestore:rules)"
     ]
   },
   "hooks": {
