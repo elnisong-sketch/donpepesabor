@@ -3572,7 +3572,7 @@ function cargarLS(key, fallback) {
  * Las cifras van a dos dígitos —01, 05, 50— para que la columna quede recta y
  * se puedan comparar de un vistazo sin tener que leerlas una a una.
  */
-function ListaBandejas({ titulo, carga, fuerte }) {
+function ListaBandejas({ titulo, carga, pedidos, fuerte }) {
   if (!carga.length) return null;
   return (
     <div style={{ marginTop: 12 }}>
@@ -3580,6 +3580,9 @@ function ListaBandejas({ titulo, carga, fuerte }) {
         <p style={{ margin: "0 0 4px", fontSize: 11.5, fontWeight: 800, color: fuerte ? MARRON : TEXT_SUB,
           textTransform: "uppercase", letterSpacing: ".08em" }}>
           {titulo}
+          {/* Cuántos PEDIDOS son. Las bandejas ya se cuentan línea a línea
+              aquí debajo; lo que no se veía era en cuántos pedidos venían. */}
+          {pedidos != null && <span style={{ fontWeight: 700 }}> ({pedidos})</span>}
         </p>
       )}
       {carga.map(x => (
@@ -3670,8 +3673,10 @@ function ModuloBienvenida({ setTab, pedidos, productos, repartidores }) {
    * El desglose por producto es la misma cuenta que ve el repartidor en su
    * app, para que no discutan delante de la furgoneta.
    */
-  const cargaDomicilio = bandejasPorProducto(delDia.filter(p => p.tipoEntrega !== "Recogida"));
-  const cargaMostrador = bandejasPorProducto(delDia.filter(p => p.tipoEntrega === "Recogida"));
+  const pedidosDomicilio = delDia.filter(p => p.tipoEntrega !== "Recogida");
+  const pedidosMostrador = delDia.filter(p => p.tipoEntrega === "Recogida");
+  const cargaDomicilio = bandejasPorProducto(pedidosDomicilio);
+  const cargaMostrador = bandejasPorProducto(pedidosMostrador);
   const cargaHoy = bandejasPorProducto(delDia);
   const bandejasHoy = cargaHoy.reduce((t, x) => t + x.cantidad, 0);
   // Las dos columnas solo tienen sentido si hay de las dos: con solo reparto,
@@ -3749,9 +3754,9 @@ function ModuloBienvenida({ setTab, pedidos, productos, repartidores }) {
               de la cocina, que lo prepara todo junto sin mirar cómo sale. */}
           {hayDeLosDos ? (
             <>
-              <ListaBandejas titulo="🚚 Domicilio" carga={cargaDomicilio} />
-              <ListaBandejas titulo="🏪 Recoger en tienda" carga={cargaMostrador} />
-              <ListaBandejas titulo="Totales" carga={cargaHoy} fuerte />
+              <ListaBandejas titulo="🚚 Domicilio" carga={cargaDomicilio} pedidos={pedidosDomicilio.length} />
+              <ListaBandejas titulo="🏪 Recoger en tienda" carga={cargaMostrador} pedidos={pedidosMostrador.length} />
+              <ListaBandejas titulo="Totales" carga={cargaHoy} pedidos={delDia.length} fuerte />
             </>
           ) : (
             <ListaBandejas carga={cargaHoy} />
