@@ -73,6 +73,52 @@ input, select, textarea {
   }
 }
 
+/* ── DOCUMENTOS PARA IMPRIMIR ───────────────────────────────────────────────
+   El albarán, la factura y los tickets no se pintan dentro de la ventana
+   flotante, sino colgando del body, fuera de la aplicación. Ver
+   `HojaImprimible` en AppModerno.jsx: dentro de un `position: fixed` el
+   navegador repetía el documento en cada página del PDF.
+
+   En PANTALLA se coloca encima, en el hueco de la ventana, para que se siga
+   viendo donde siempre. */
+.hoja-imprimible {
+  position: fixed;
+  inset: 0;
+  z-index: 210;
+  overflow-y: auto;
+  padding: 20px 16px 40px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  pointer-events: none;
+}
+.hoja-imprimible > * {
+  pointer-events: auto;
+  width: 100%;
+  max-width: 760px;
+}
+
+/* Al IMPRIMIR: fuera la aplicación entera, con display:none, que sí quita el
+   sitio. Antes se usaba visibility:hidden y el papel salía tan alto como la
+   pantalla, repitiendo el documento en tres páginas. */
+/* El botón flotante de Salir se cuela por encima del documento: con una hoja
+   abierta no pinta nada ahí, igual que con un modal. */
+body.imprimiendo-hoja .boton-salir { display: none; }
+
+@media print {
+  body.imprimiendo-hoja > #root { display: none !important; }
+  body.imprimiendo-hoja .hoja-imprimible {
+    position: static;
+    overflow: visible;
+    padding: 0;
+    display: block;
+  }
+  body.imprimiendo-hoja .hoja-imprimible > * { max-width: none; }
+
+  /* El título de la ventana y los botones son de la pantalla, no del papel. */
+  .titulo-hoja, .pie-documento { display: none !important; }
+}
+
 /* Con una ficha abierta, el botón flotante de Salir se le montaba encima a
    "Imprimir" en el móvil. Mientras haya un modal, desaparece: no hay nada que
    hacer ahí, y cerrar la sesión sin querer en ese momento sería lo peor. */

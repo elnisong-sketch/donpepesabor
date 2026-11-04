@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { auth, db } from "./firebase";
 import { EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
 import { collection, deleteDoc, doc, onSnapshot, setDoc } from "firebase/firestore";
@@ -1091,15 +1092,19 @@ function AlbaranPedido({ pedido, empresa, pedidos, onEmitir, onCerrar }) {
   );
 
   return (
-    <Modal title="📋 Albarán de entrega" accent={ac} onClose={onCerrar}>
+    <HojaImprimible>
+      <div style={{ background: BG_CARD, border: `1px solid ${BORDER}`, borderRadius: 16,
+        padding: 20, boxShadow: "0 20px 60px #0003" }} className="caja-hoja">
       <style>{`
         @media print {
-          body * { visibility: hidden !important; }
-          #albaran-imprimible, #albaran-imprimible * { visibility: visible !important; }
-          #albaran-imprimible { position: absolute; left: 0; top: 0; width: 100%; padding: 0; margin: 0; }
           @page { size: A4; margin: 18mm; }
+          .caja-hoja { border: 0 !important; border-radius: 0 !important;
+                       padding: 0 !important; box-shadow: none !important; }
         }
       `}</style>
+
+      <h2 style={{ color: MARRON, margin: "0 0 16px", fontSize: 19, fontFamily: TIPO_TIT, fontWeight: 800 }}
+        className="titulo-hoja">📋 Albarán de entrega</h2>
 
       <div id="albaran-imprimible" style={{
         background: "#fff", color: "#000", padding: 4,
@@ -1224,7 +1229,8 @@ function AlbaranPedido({ pedido, empresa, pedidos, onEmitir, onCerrar }) {
         onCerrar={onCerrar}
         onEnviar={emitir(() => {})}
         onImprimir={emitir(() => window.print())} />
-    </Modal>
+      </div>
+    </HojaImprimible>
   );
 }
 
@@ -3745,6 +3751,45 @@ const TABS_ADMIN = [
 
 function cargarLS(key, fallback) {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
+}
+
+/**
+ * UN DOCUMENTO PARA IMPRIMIR, fuera de la ventana flotante.
+ *
+ * El albarán salía en TRES páginas con lo mismo repetido, y por dos motivos a
+ * la vez:
+ *
+ * 1. Vivía dentro de `.modal-overlay`, que es `position: fixed`, y el
+ *    navegador vuelve a pintar los elementos fijos EN CADA PÁGINA.
+ * 2. El resto de la gestión se ocultaba con `visibility: hidden`, que esconde
+ *    pero NO quita el sitio: el papel salía tan alto como la pantalla entera,
+ *    y de ahí las páginas de más que la repetían.
+ *
+ * La solución es sacarlo de ahí: el documento se pinta en un sitio aparte,
+ * colgando directamente del `body`, fuera de la aplicación. Al imprimir se
+ * esconde la aplicación con `display: none` —que sí quita el sitio— y queda
+ * el documento solo, en una página y sin nada fijo alrededor.
+ *
+ * En pantalla se ve donde siempre, dentro de la ventana: lo de abajo lo coloca
+ * en su sitio con CSS, sin tocar el contenido.
+ */
+function HojaImprimible({ children }) {
+  const [destino] = useState(() => {
+    const d = document.createElement("div");
+    d.className = "hoja-imprimible";
+    return d;
+  });
+
+  useEffect(() => {
+    document.body.appendChild(destino);
+    document.body.classList.add("imprimiendo-hoja");
+    return () => {
+      document.body.removeChild(destino);
+      document.body.classList.remove("imprimiendo-hoja");
+    };
+  }, [destino]);
+
+  return createPortal(children, destino);
 }
 
 /** "2026-11-04" → "04/11/2026", que es como se leen las fechas en un papel. */
