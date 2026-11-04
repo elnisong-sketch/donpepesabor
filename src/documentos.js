@@ -33,6 +33,14 @@ export const EMPRESA_VACIA = {
   nif: "B75361477",
   direccion: "Calle Berrocal 7, local 3, 28021 Madrid",
   telefono: "604 136 371",
+  /**
+   * Número de Registro General Sanitario de Empresas Alimentarias (RGSEAA).
+   *
+   * Es lo que acredita que la cocina está dada de alta para elaborar y vender
+   * a otros negocios. En blanco no se imprime: en cuanto se escriba en
+   * Administración, sale en el albarán y en la factura.
+   */
+  registroSanitario: "",
   iva: 10,          // % que lleva el precio de venta dentro; lo confirma el gestor
   serie: "A",       // serie de la numeración de facturas
   /**

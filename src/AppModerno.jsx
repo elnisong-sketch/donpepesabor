@@ -1040,16 +1040,7 @@ function AlbaranPedido({ pedido, empresa, onCerrar }) {
         fontFamily: "Arial, Helvetica, sans-serif", fontSize: 13, lineHeight: 1.5,
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 18 }}>{emp.nombre}</div>
-            {/* Quien factura va debajo del nombre comercial, como en el albarán
-                del cliente: el papel lo pide, pero la gente conoce el otro. */}
-            {emp.razonSocial && emp.razonSocial !== emp.nombre &&
-              <div style={{ fontSize: 12 }}>{emp.razonSocial}</div>}
-            <div style={{ fontSize: 12 }}>{emp.direccion || DIRECCION_LOCAL}</div>
-            {emp.nif && <div style={{ fontSize: 12 }}>CIF {emp.nif}</div>}
-            <div style={{ fontSize: 12 }}>WhatsApp {emp.telefono}</div>
-          </div>
+          <MembreteEmpresa emp={emp} />
           <div style={{ textAlign: "right" }}>
             <div style={{ fontSize: 11, letterSpacing: 2 }}>ALBARÁN</div>
             <div style={{ fontSize: 24, fontWeight: 700, lineHeight: 1.1 }}>{numero}</div>
@@ -1087,6 +1078,12 @@ function AlbaranPedido({ pedido, empresa, onCerrar }) {
           : <p style={{ fontSize: 11, margin: "10px 0 0", fontStyle: "italic" }}>
               Albarán sin valorar. El importe va en la factura.
             </p>}
+
+        {/* La forma de pago, como en cualquier albarán de proveedor: quien lo
+            archiva necesita saber si eso ya está cobrado o va a recibo. */}
+        {pedido.formaPago && (
+          <p style={{ fontSize: 12, marginTop: 10 }}>Forma de pago: <strong>{pedido.formaPago}</strong></p>
+        )}
 
         {(pedido.nota || pedido.notas) && <p style={{ fontSize: 12, marginTop: 10 }}>Observaciones: {pedido.nota || pedido.notas}</p>}
 
@@ -1171,14 +1168,7 @@ function FacturaPedido({ pedido, empresa, onCerrar }) {
         fontFamily: "Arial, Helvetica, sans-serif", fontSize: 13, lineHeight: 1.5,
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 18 }}>{emp.nombre}</div>
-            {emp.razonSocial && emp.razonSocial !== emp.nombre &&
-              <div style={{ fontSize: 12 }}>{emp.razonSocial}</div>}
-            <div style={{ fontSize: 12 }}>{emp.direccion || DIRECCION_LOCAL}</div>
-            <div style={{ fontSize: 12 }}>{emp.nif ? `CIF ${emp.nif}` : "CIF: pendiente"}</div>
-            <div style={{ fontSize: 12 }}>WhatsApp {emp.telefono}</div>
-          </div>
+          <MembreteEmpresa emp={emp} />
           <div style={{ textAlign: "right" }}>
             <div style={{ fontSize: 11, letterSpacing: 2 }}>{valida ? "FACTURA" : "PROFORMA"}</div>
             <div style={{ fontSize: 24, fontWeight: 700, lineHeight: 1.1 }}>{numero}</div>
@@ -3489,6 +3479,13 @@ function ModuloAdmin({ proveedores, setProveedores, compras, setCompras, gastos,
           onChange={e => setEmpresa({ ...emp, direccion: e.target.value })} placeholder={DIRECCION_LOCAL} />
         <Input label="Teléfono" value={emp.telefono}
           onChange={e => setEmpresa({ ...emp, telefono: e.target.value })} placeholder="604 136 371" />
+        <Input label="Registro sanitario (RGSEAA)" value={emp.registroSanitario || ""}
+          onChange={e => setEmpresa({ ...emp, registroSanitario: e.target.value })}
+          placeholder="26.0012345/M" />
+        <p style={{ color: TEXT_SUB, fontSize: 12, margin: "-8px 0 14px", lineHeight: 1.5 }}>
+          El número con el que la cocina está dada de alta para vender a otros negocios.
+          En blanco no se imprime; en cuanto lo escribas sale en los albaranes y las facturas.
+        </p>
         <Input label="IVA que llevan los precios dentro (%)" type="number" min="0" step="1" value={emp.iva}
           onChange={e => setEmpresa({ ...emp, iva: e.target.value })} placeholder="10" />
         {/* El último paso, y el que no se puede dar sin el gestor: tener el CIF
@@ -3596,6 +3593,36 @@ const TABS_ADMIN = [
 
 function cargarLS(key, fallback) {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
+}
+
+/**
+ * La cabecera de quien vende, igual en el albarán, la factura y el resumen.
+ *
+ * Lleva el logo porque un papel que se entrega a otra empresa y se archiva
+ * tiene que reconocerse de un vistazo entre los veinte albaranes del mes.
+ */
+function MembreteEmpresa({ emp }) {
+  return (
+    <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+      <img src="/logo-donpepe.png" alt="" style={{ width: 62, height: 62, objectFit: "contain", flex: "none" }} />
+      <div>
+        <div style={{ fontWeight: 700, fontSize: 18 }}>{emp.nombre}</div>
+        {/* Quien factura va debajo del nombre comercial: el papel lo pide,
+            pero a la empresa la conoce la gente por el otro. */}
+        {emp.razonSocial && emp.razonSocial !== emp.nombre &&
+          <div style={{ fontSize: 12 }}>{emp.razonSocial}</div>}
+        <div style={{ fontSize: 12 }}>{emp.direccion || DIRECCION_LOCAL}</div>
+        {emp.nif && <div style={{ fontSize: 12 }}>CIF {emp.nif}</div>}
+        <div style={{ fontSize: 12 }}>WhatsApp {emp.telefono}</div>
+        {/* El registro sanitario, si está puesto. Es lo que acredita que la
+            cocina está dada de alta para vender a otros negocios, y es lo que
+            mira una inspección en casa del cliente. */}
+        {emp.registroSanitario && (
+          <div style={{ fontSize: 12 }}>Reg. Sanitario {emp.registroSanitario}</div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 /**
