@@ -1119,15 +1119,16 @@ function AlbaranPedido({ pedido, empresa, pedidos, onEmitir, onCerrar }) {
         {/* ── Cabecera: título y número ───────────────────────────────── */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 20 }}>
           <div>
-            {/* En una línea y no en dos: cada renglón de más aquí es un
-                producto menos que cabe antes de saltar a la segunda hoja. */}
+            {/* "ALBARÁN" a secas: la palabra ya significa nota de entrega, y
+                "albarán de entrega" es decirlo dos veces. Es como lo titulan
+                los proveedores de verdad. */}
             <h1 style={{ fontFamily: TIPO_TIT, fontSize: 25, fontWeight: 900, color: MARRON,
               margin: 0, lineHeight: 1.1, letterSpacing: "-.01em" }}>
-              ALBARÁN DE ENTREGA
+              ALBARÁN
             </h1>
           </div>
           <div style={{ ...aColor(ORO), borderRadius: 10, padding: "9px 14px", minWidth: 160, textAlign: "right" }}>
-            <div style={{ fontSize: 10, letterSpacing: ".14em", color: MARRON, fontWeight: 700 }}>Nº DE ALBARÁN</div>
+            <div style={{ fontSize: 10, letterSpacing: ".14em", color: MARRON, fontWeight: 700 }}>NÚMERO</div>
             <div style={{ fontFamily: TIPO_TIT, fontSize: 23, fontWeight: 900, color: MARRON, lineHeight: 1.15 }}>{numero}</div>
             <div style={{ fontSize: 11.5, color: MARRON }}>{fechaLegible(pedido.fecha)}</div>
             {/* El número del pedido se queda: son dos cosas distintas y a
