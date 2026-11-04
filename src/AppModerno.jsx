@@ -1066,6 +1066,7 @@ function AlbaranPedido({ pedido, empresa, pedidos, onEmitir, onCerrar }) {
   const euros = n => (n || 0).toFixed(2) + " €";
   const codigoPedido = pedido.codigo || `#${String(pedido.id).slice(-4).toUpperCase()}`;
   const emp = fusionaEmpresa(empresa);
+  const { tipo, base, cuota } = desglosaIva(total, emp.iva);
 
   /**
    * El número de albarán, que no es el del pedido.
@@ -1172,7 +1173,15 @@ function AlbaranPedido({ pedido, empresa, pedidos, onEmitir, onCerrar }) {
         {conPrecios && servicio > 0 && <Linea izq={fritas ? `Fritura (${fritas} bandejas)` : "Fritura"} der={euros(servicio)} />}
         {conPrecios && envio > 0 && <Linea izq="Transporte" der={euros(envio)} />}
         {conPrecios
-          ? <Linea izq="TOTAL" der={euros(total)} fuerte />
+          ? <>
+              {/* Base imponible y cuota, como en el albarán del proveedor.
+                  Los precios llevan el IVA dentro, así que se saca de ahí: el
+                  total NO cambia, solo se enseña de qué se compone. El tipo
+                  lo confirmó el gestor el 04/11/2026: 10 % en todo. */}
+              <Linea izq="Base imponible" der={euros(base)} />
+              <Linea izq={`IVA ${tipo} %`} der={euros(cuota)} />
+              <Linea izq="TOTAL" der={euros(total)} fuerte />
+            </>
           : <p style={{ fontSize: 11, margin: "10px 0 0", fontStyle: "italic" }}>
               Albarán sin valorar. El importe va en la factura.
             </p>}
