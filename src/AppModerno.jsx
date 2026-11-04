@@ -1106,112 +1106,160 @@ function AlbaranPedido({ pedido, empresa, pedidos, onEmitir, onCerrar }) {
       <h2 style={{ color: MARRON, margin: "0 0 16px", fontSize: 19, fontFamily: TIPO_TIT, fontWeight: 800 }}
         className="titulo-hoja">📋 Albarán de entrega</h2>
 
+      {/* La maquetación es la del albarán que pasó el dueño como modelo:
+          título grande arriba, el número en un recuadro de color a la derecha,
+          emisor y cliente en dos columnas, la tabla con su cabecera en banda,
+          cada línea con un renglón pequeño debajo para el detalle, y una banda
+          de color a todo lo ancho al pie. El contenido es el nuestro, intacto:
+          solo cambia cómo está puesto. */}
       <div id="albaran-imprimible" style={{
-        background: "#fff", color: "#000", padding: 4,
-        fontFamily: "Arial, Helvetica, sans-serif", fontSize: 13, lineHeight: 1.5,
+        background: "#fff", color: TEXT_MAIN,
+        fontFamily: TIPO, fontSize: 12.5, lineHeight: 1.5,
       }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
-          <MembreteEmpresa emp={emp} />
-          <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: 11, letterSpacing: 2 }}>ALBARÁN</div>
-            <div style={{ fontSize: 24, fontWeight: 700, lineHeight: 1.1 }}>{numero}</div>
-            <div style={{ fontSize: 12 }}>{fechaLegible(pedido.fecha)}</div>
-            {/* El número del pedido se queda, en pequeño: son dos cosas
-                distintas y a veces hay que casarlas. */}
-            <div style={{ fontSize: 11, color: "#555" }}>Pedido {codigoPedido}</div>
+        {/* ── Cabecera: título y número ───────────────────────────────── */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 20 }}>
+          <div>
+            {/* En una línea y no en dos: cada renglón de más aquí es un
+                producto menos que cabe antes de saltar a la segunda hoja. */}
+            <h1 style={{ fontFamily: TIPO_TIT, fontSize: 25, fontWeight: 900, color: MARRON,
+              margin: 0, lineHeight: 1.1, letterSpacing: "-.01em" }}>
+              ALBARÁN DE ENTREGA
+            </h1>
+          </div>
+          <div style={{ ...aColor(ORO), borderRadius: 10, padding: "9px 14px", minWidth: 160, textAlign: "right" }}>
+            <div style={{ fontSize: 10, letterSpacing: ".14em", color: MARRON, fontWeight: 700 }}>Nº DE ALBARÁN</div>
+            <div style={{ fontFamily: TIPO_TIT, fontSize: 23, fontWeight: 900, color: MARRON, lineHeight: 1.15 }}>{numero}</div>
+            <div style={{ fontSize: 11.5, color: MARRON }}>{fechaLegible(pedido.fecha)}</div>
+            {/* El número del pedido se queda: son dos cosas distintas y a
+                veces hay que casarlas. */}
+            <div style={{ fontSize: 10.5, color: "#6b4a12" }}>Pedido {codigoPedido}</div>
           </div>
         </div>
 
-        <div style={{ border: "1px solid #999", borderRadius: 4, padding: 10, marginBottom: 14 }}>
-          <div style={{ fontSize: 11, letterSpacing: 1, marginBottom: 4 }}>ENTREGAR A</div>
-          {/* Arriba el nombre con el que se conoce al sitio: es el que busca quien
-              reparte. La razón social va debajo, que es lo que pide el papel. */}
-          <div style={{ fontWeight: 700 }}>{pedido.nombre || f.razonSocial}</div>
-          {f.razonSocial && f.razonSocial !== pedido.nombre && (
-            <div style={{ fontSize: 12 }}>{f.razonSocial}</div>
-          )}
-          {f.nif && <div style={{ fontSize: 12 }}>NIF {f.nif}</div>}
-
-          {/* LAS DOS DIRECCIONES, ETIQUETADAS Y POR SEPARADO.
-              Un cliente con cuatro sedes recibe en una y factura en otra, y
-              lo pidió por escrito así. Antes se imprimía solo la de entrega y
-              la de facturación no llegaba a salir nunca: estaba guardada,
-              pero el papel la tapaba con la otra. */}
-          <div style={{ fontSize: 12, marginTop: 6 }}>
-            <span style={{ fontWeight: 700 }}>Entregar en: </span>
-            {pedido.sede ? `${pedido.sede} · ` : ""}
-            {pedido.direccion || f.direccion} {pedido.cp || ""}
-            {pedido.piso ? ` (${pedido.piso})` : ""}
+        {/* ── Emisor y cliente, uno al lado del otro ──────────────────── */}
+        <div style={{ display: "flex", gap: 12, marginTop: 14 }}>
+          <div style={{ flex: 1, ...aColor(BG_APP), border: `1px solid ${BORDER}`, borderRadius: 10, padding: "11px 13px" }}>
+            <div style={{ fontSize: 10, letterSpacing: ".14em", color: TEXT_SUB, fontWeight: 700, marginBottom: 7 }}>EMITIDO POR</div>
+            <MembreteEmpresa emp={emp} />
           </div>
 
-          {/* Solo si está puesta y no es la misma: repetir la dirección dos
-              veces no informa de nada y da aspecto de error. */}
-          {f.direccion && f.direccion.trim() !== String(pedido.direccion || "").trim() && (
-            <div style={{ fontSize: 12 }}>
-              <span style={{ fontWeight: 700 }}>Facturar a: </span>
-              {f.direccion} {f.cp || ""} {f.poblacion || ""}
+          <div style={{ flex: 1, ...aColor(BG_APP), border: `1px solid ${BORDER}`, borderRadius: 10, padding: "11px 13px" }}>
+            <div style={{ fontSize: 10, letterSpacing: ".14em", color: TEXT_SUB, fontWeight: 700, marginBottom: 7 }}>CLIENTE</div>
+            {/* Arriba el nombre con el que se conoce al sitio: es el que busca
+                quien reparte. La razón social debajo, que es lo que pide el papel. */}
+            <div style={{ fontWeight: 700, fontSize: 15 }}>{pedido.nombre || f.razonSocial}</div>
+            {f.razonSocial && f.razonSocial !== pedido.nombre && <div>{f.razonSocial}</div>}
+            {f.nif && <div>NIF {f.nif}</div>}
+
+            {/* LAS DOS DIRECCIONES, ETIQUETADAS Y POR SEPARADO: un cliente con
+                cuatro sedes recibe en una y factura en otra, y lo pidió así
+                por escrito. */}
+            <div style={{ marginTop: 6 }}>
+              <span style={{ fontWeight: 700 }}>Entregar en: </span>
+              {pedido.sede ? `${pedido.sede} · ` : ""}
+              {pedido.direccion || f.direccion} {pedido.cp || ""}
+              {pedido.piso ? ` (${pedido.piso})` : ""}
             </div>
-          )}
-
-          {pedido.telefono && <div style={{ fontSize: 12, marginTop: 4 }}>Tel. {pedido.telefono}</div>}
+            {/* Solo si está puesta y es distinta: repetirla parece un error. */}
+            {f.direccion && f.direccion.trim() !== String(pedido.direccion || "").trim() && (
+              <div>
+                <span style={{ fontWeight: 700 }}>Facturar a: </span>
+                {f.direccion} {f.cp || ""} {f.poblacion || ""}
+              </div>
+            )}
+            {pedido.telefono && <div style={{ marginTop: 4 }}>Tel. {pedido.telefono}</div>}
+          </div>
         </div>
 
-        <div style={{ fontSize: 11, letterSpacing: 1, marginBottom: 2 }}>MERCANCÍA ENTREGADA</div>
-        <div style={{ borderTop: "2px solid #000" }} />
-        {(pedido.items || []).map((it, i) => (
-          <Linea key={i}
-            izq={<>
-              {it.cantidad} × {it.nombreProducto} · {it.presentacion} · {preparacionDe(it)}
-              {/* La trazabilidad, debajo de su línea: es lo que permite saber
-                  qué lote fue a qué cliente si un día hay que retirar una
-                  partida. Sale solo lo que esté puesto. */}
-              {(it.lote || it.elaboracion || it.caducidad) && (
-                <div style={{ fontSize: 11, color: "#444", marginTop: 1 }}>
-                  {it.lote && <>Lote <strong>{it.lote}</strong></>}
-                  {it.elaboracion && <> · Elab. {fechaCorta(it.elaboracion)}</>}
-                  {it.caducidad && <> · Cad. {fechaCorta(it.caducidad)}</>}
-                </div>
-              )}
-            </>}
-            der={conPrecios ? euros(it.subtotal) : ""} />
-        ))}
-        {conPrecios && servicio > 0 && <Linea izq={fritas ? `Fritura (${fritas} bandejas)` : "Fritura"} der={euros(servicio)} />}
-        {conPrecios && envio > 0 && <Linea izq="Transporte" der={euros(envio)} />}
-        {conPrecios
-          ? <>
-              {/* Base imponible y cuota, como en el albarán del proveedor.
-                  Los precios llevan el IVA dentro, así que se saca de ahí: el
-                  total NO cambia, solo se enseña de qué se compone. El tipo
-                  lo confirmó el gestor el 04/11/2026: 10 % en todo. */}
+        {/* ── La mercancía ────────────────────────────────────────────── */}
+        <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 14 }}>
+          <thead>
+            <tr style={{ ...aColor(BG_APP) }}>
+              <th style={{ ...celdaCab, textAlign: "left" }}>Descripción</th>
+              <th style={{ ...celdaCab, width: 70, textAlign: "center" }}>Bandejas</th>
+              {conPrecios && <th style={{ ...celdaCab, width: 90, textAlign: "right" }}>Importe</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {(pedido.items || []).map((it, i) => (
+              <tr key={i} style={{ borderBottom: `1px solid ${BORDER}`, verticalAlign: "top", breakInside: "avoid" }}>
+                <td style={{ padding: "9px 10px" }}>
+                  <div style={{ fontWeight: 600 }}>{it.nombreProducto}</div>
+                  <div style={{ fontSize: 11, color: TEXT_SUB, marginTop: 1 }}>
+                    {it.presentacion} · {preparacionDe(it)}
+                    {/* La trazabilidad, en el renglón pequeño: es lo que permite
+                        saber qué lote fue a qué cliente si hay que retirar una
+                        partida. Sale solo lo que esté puesto. */}
+                    {it.lote && <> · Lote <strong style={{ color: TEXT_MAIN }}>{it.lote}</strong></>}
+                    {it.elaboracion && <> · Elab. {fechaCorta(it.elaboracion)}</>}
+                    {it.caducidad && <> · Cad. {fechaCorta(it.caducidad)}</>}
+                  </div>
+                </td>
+                <td style={{ padding: "9px 10px", textAlign: "center", fontWeight: 700 }}>{it.cantidad}</td>
+                {conPrecios && <td style={{ padding: "9px 10px", textAlign: "right" }}>{euros(it.subtotal)}</td>}
+              </tr>
+            ))}
+            {conPrecios && servicio > 0 && (
+              <tr style={{ borderBottom: `1px solid ${BORDER}` }}>
+                <td style={{ padding: "9px 10px" }} colSpan={2}>{fritas ? `Fritura (${fritas} bandejas)` : "Fritura"}</td>
+                <td style={{ padding: "9px 10px", textAlign: "right" }}>{euros(servicio)}</td>
+              </tr>
+            )}
+            {conPrecios && envio > 0 && (
+              <tr style={{ borderBottom: `1px solid ${BORDER}` }}>
+                <td style={{ padding: "9px 10px" }} colSpan={2}>Transporte</td>
+                <td style={{ padding: "9px 10px", textAlign: "right" }}>{euros(envio)}</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+
+        {/* ── Totales, arrimados a la derecha ─────────────────────────── */}
+        {conPrecios ? (
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
+            <div style={{ minWidth: 250 }}>
+              {/* El total NO cambia: los precios llevan el IVA dentro y aquí
+                  solo se enseña de qué se compone. El tipo lo confirmó el
+                  gestor el 04/11/2026: 10 % en todo. */}
               <Linea izq="Base imponible" der={euros(base)} />
               <Linea izq={`IVA ${tipo} %`} der={euros(cuota)} />
-              <Linea izq="TOTAL" der={euros(total)} fuerte />
-            </>
-          : <p style={{ fontSize: 11, margin: "10px 0 0", fontStyle: "italic" }}>
-              Albarán sin valorar. El importe va en la factura.
-            </p>}
-
-        {/* La forma de pago, como en cualquier albarán de proveedor: quien lo
-            archiva necesita saber si eso ya está cobrado o va a recibo. */}
-        {pedido.formaPago && (
-          <p style={{ fontSize: 12, marginTop: 10 }}>Forma de pago: <strong>{pedido.formaPago}</strong></p>
-        )}
-
-        {(pedido.nota || pedido.notas) && <p style={{ fontSize: 12, marginTop: 10 }}>Observaciones: {pedido.nota || pedido.notas}</p>}
-
-        <p style={{ fontSize: 11, marginTop: 16, color: "#444" }}>
-          Este documento acredita la entrega de la mercancía. No es una factura.
-        </p>
-
-        <div style={{ display: "flex", gap: 30, marginTop: 28 }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ borderTop: "1px solid #000", paddingTop: 4, fontSize: 11 }}>Entregado por</div>
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ borderTop: "1px solid #000", paddingTop: 4, fontSize: 11 }}>
-              Recibido {f.contacto ? `por ${f.contacto}` : "(nombre y firma)"}
+              <div style={{ ...aColor(MARRON), color: "#fff", borderRadius: 8, padding: "9px 13px",
+                display: "flex", justifyContent: "space-between", marginTop: 7 }}>
+                <span style={{ fontWeight: 700 }}>TOTAL</span>
+                <span style={{ fontFamily: TIPO_TIT, fontWeight: 900, fontSize: 16 }}>{euros(total)}</span>
+              </div>
             </div>
           </div>
+        ) : (
+          <p style={{ fontSize: 11.5, margin: "12px 0 0", fontStyle: "italic", color: TEXT_SUB }}>
+            Albarán sin valorar. El importe va en la factura.
+          </p>
+        )}
+
+        {/* ── Pie: pago, observaciones y firmas ───────────────────────── */}
+        <div style={{ marginTop: 16, fontSize: 12 }}>
+          {/* Quien archiva el albarán necesita saber si eso está cobrado. */}
+          {pedido.formaPago && <div>Forma de pago: <strong>{pedido.formaPago}</strong></div>}
+          {(pedido.nota || pedido.notas) && <div>Observaciones: {pedido.nota || pedido.notas}</div>}
+        </div>
+
+        <div style={{ display: "flex", gap: 34, marginTop: 26 }}>
+          <div style={{ flex: 1, borderTop: `1px solid ${TEXT_SUB}`, paddingTop: 5, fontSize: 11, color: TEXT_SUB }}>
+            Entregado por
+          </div>
+          <div style={{ flex: 1, borderTop: `1px solid ${TEXT_SUB}`, paddingTop: 5, fontSize: 11, color: TEXT_SUB }}>
+            Recibí conforme {f.contacto ? `· ${f.contacto}` : "(nombre y firma)"}
+          </div>
+        </div>
+
+        {/* Banda a todo lo ancho, como la del modelo. */}
+        <div style={{ ...aColor(MARRON), color: "#c3a98f", borderRadius: 8, marginTop: 18,
+          padding: "9px 14px", fontSize: 10.5, letterSpacing: ".06em",
+          display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <span style={{ color: "#fff", fontWeight: 700 }}>
+            DON PEPE <span style={{ color: ORO }}>SABOR</span> · TEQUEÑOS, PASTELES Y EMPANADAS
+          </span>
+          <span>Acredita la entrega de la mercancía. No es una factura.</span>
         </div>
       </div>
 
@@ -3792,6 +3840,29 @@ function HojaImprimible({ children }) {
   return createPortal(children, destino);
 }
 
+/**
+ * Un fondo de color que SÍ se imprime.
+ *
+ * Los navegadores quitan los fondos al imprimir, para no gastar tinta. En una
+ * web da igual; en un albarán con bandas de color se queda todo en blanco y el
+ * diseño desaparece. Esto se lo prohíbe.
+ */
+const aColor = (fondo) => ({
+  background: fondo,
+  WebkitPrintColorAdjust: "exact",
+  printColorAdjust: "exact",
+});
+
+/** Cabecera de la tabla de mercancía. */
+const celdaCab = {
+  padding: "7px 10px",
+  fontSize: 10.5,
+  letterSpacing: ".1em",
+  fontWeight: 700,
+  color: TEXT_SUB,
+  borderBottom: `1.5px solid ${MARRON}`,
+};
+
 /** "2026-11-04" → "04/11/2026", que es como se leen las fechas en un papel. */
 const fechaCorta = (iso) => {
   const [a, m, d] = String(iso || "").split("-");
@@ -3820,7 +3891,9 @@ const CampoLote = ({ etiqueta, valor, tipo, placeholder, onChange }) => (
 function MembreteEmpresa({ emp }) {
   return (
     <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-      <img src="/logo-donpepe.png" alt="" style={{ width: 62, height: 62, objectFit: "contain", flex: "none" }} />
+      {/* Pequeño a propósito: en una hoja A4 cada píxel de alto aquí es menos
+          sitio para los productos antes de saltar a la segunda página. */}
+      <img src="/logo-donpepe.png" alt="" style={{ width: 46, height: 46, objectFit: "contain", flex: "none" }} />
       <div>
         <div style={{ fontWeight: 700, fontSize: 18 }}>{emp.nombre}</div>
         {/* Quien factura va debajo del nombre comercial: el papel lo pide,

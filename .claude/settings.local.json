@@ -3,15 +3,6 @@
     "ENABLE_TOOL_SEARCH": "true"
   },
   "permissions": {
-    "comentario": [
-      "Permisos por TIPO de orden, no por la orden exacta.",
-      "Antes esta lista guardaba cada orden letra por letra ('sed -i -e s/...'),",
-      "así que la siguiente vez cambiaba un detalle y volvía a preguntar.",
-      "Aquí está lo que se hace a diario en este proyecto: mirar archivos,",
-      "compilar, probar en el navegador, publicar y guardar en git.",
-      "Lo que NO está y sigue preguntando, a propósito: borrar cosas que no",
-      "sean los archivos de prueba, y cualquier orden que no se haya visto."
-    ],
     "allow": [
       "Bash(ls *)",
       "Bash(cat *)",
@@ -40,7 +31,18 @@
       "Bash(rm -f src/__prueba*)",
       "Bash(netstat *)",
       "Bash(echo *)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(PYTHONIOENCODING=utf-8 python -c ' *)",
+      "Bash(cp \"C:/Users/Usuario/.claude/projects/D--RESPALDO-Personal-DonPepeSabor/a0c9bc3a-a1e4-4dcd-9e2d-6b004de38108/tool-results/mcp-Claude_Browser-blob-1793792203886-mdp0q9.jpg\" \"C:/Users/Usuario/AppData/Local/Temp/claude/e62eea8b357bcbf4/a0c9bc3a-a1e4-4dcd-9e2d-6b004de38108/scratchpad/albaran-nuevo.jpg\" && ls -la \"C:/Users/Usuario/AppData/Local/Temp/claude/e62eea8b357bcbf4/a0c9bc3a-a1e4-4dcd-9e2d-6b004de38108/scratchpad/albaran-nuevo.jpg\")"
+    ],
+    "comentario": [
+      "Permisos por TIPO de orden, no por la orden exacta.",
+      "Antes esta lista guardaba cada orden letra por letra ('sed -i -e s/...'),",
+      "así que la siguiente vez cambiaba un detalle y volvía a preguntar.",
+      "Aquí está lo que se hace a diario en este proyecto: mirar archivos,",
+      "compilar, probar en el navegador, publicar y guardar en git.",
+      "Lo que NO está y sigue preguntando, a propósito: borrar cosas que no",
+      "sean los archivos de prueba, y cualquier orden que no se haya visto."
     ]
   },
   "hooks": {
