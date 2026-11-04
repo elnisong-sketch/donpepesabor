@@ -31,6 +31,14 @@ export const EMPRESA_VACIA = {
   nombre: "Don Pepe Sabor",
   razonSocial: "Inversiones Ayala 1992",
   nif: "B75361477",
+  /**
+   * LA DEL LOCAL, no la del domicilio social.
+   *
+   * En el registro sanitario constan dos direcciones: la industrial (Berrocal
+   * 7, local 3), que es la cocina, y la social (Berrocal 56, planta 5, puerta
+   * B). En los papeles va la del local, por decisión del dueño el 04/11/2026.
+   * Si alguien ve la otra en un papel oficial y piensa en cambiarla: no.
+   */
   direccion: "Calle Berrocal 7, local 3, 28021 Madrid",
   telefono: "604 136 371",
   /**
