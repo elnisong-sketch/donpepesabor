@@ -1104,7 +1104,7 @@ function AlbaranPedido({ pedido, empresa, pedidos, onEmitir, onCerrar }) {
       `}</style>
 
       <h2 style={{ color: MARRON, margin: "0 0 16px", fontSize: 19, fontFamily: TIPO_TIT, fontWeight: 800 }}
-        className="titulo-hoja">📋 Albarán de entrega</h2>
+        className="titulo-hoja">📋 Albarán</h2>
 
       {/* La maquetación es la del albarán que pasó el dueño como modelo:
           título grande arriba, el número en un recuadro de color a la derecha,
