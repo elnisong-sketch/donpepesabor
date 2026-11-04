@@ -628,6 +628,11 @@ function FormularioPedido({ productos, clientes, repartidores, pedidos, onGuarda
    */
   const etiquetaSede = (s) => s.nombre || s.direccion || "Sin nombre";
 
+  /** Cambia un dato de una línea del pedido (el lote y sus fechas). */
+  const cambiarItem = (idx, campo, valor) => setForm(f => ({
+    ...f, items: f.items.map((it, i) => (i === idx ? { ...it, [campo]: valor } : it)),
+  }));
+
   const elegirSede = (etiqueta) => {
     const s = sedesCliente.find(x => etiquetaSede(x) === etiqueta);
     if (!s) return;
@@ -803,21 +808,40 @@ function FormularioPedido({ productos, clientes, repartidores, pedidos, onGuarda
         <div style={{ marginBottom: 14 }}>
           <p style={{ color: TEXT_SUB, fontSize: 12, marginBottom: 6, fontWeight: 700 }}>PRODUCTOS EN EL PEDIDO</p>
           {form.items.map((it, idx) => (
-            <div key={it.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #25262f" }}>
-              <div>
-                <span style={{ color: TEXT_MAIN, fontSize: 13 }}>{it.cantidad}x {it.nombreProducto} · {it.presentacion} · {it.estado}</span>
-                <div style={{ color: "#666", fontSize: 12, marginTop: 2 }}>
-                  {it.precio > 0 ? `Precio unitario: ${it.precio.toFixed(2)}€` : "Precio unitario: — (sin precio en Inventario)"}
-                  {it.precioTarifa > 0 && Math.abs(it.precioTarifa - it.precio) > 0.009 && (
-                    <span style={{ color: ACENTOS.gastos, fontWeight: 700 }}> · especial (tarifa {it.precioTarifa.toFixed(2)}€)</span>
-                  )}
+            <div key={it.id} style={{ padding: "8px 0", borderBottom: "1px solid #25262f" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <span style={{ color: TEXT_MAIN, fontSize: 13 }}>{it.cantidad}x {it.nombreProducto} · {it.presentacion} · {it.estado}</span>
+                  <div style={{ color: "#666", fontSize: 12, marginTop: 2 }}>
+                    {it.precio > 0 ? `Precio unitario: ${it.precio.toFixed(2)}€` : "Precio unitario: — (sin precio en Inventario)"}
+                    {it.precioTarifa > 0 && Math.abs(it.precioTarifa - it.precio) > 0.009 && (
+                      <span style={{ color: ACENTOS.gastos, fontWeight: 700 }}> · especial (tarifa {it.precioTarifa.toFixed(2)}€)</span>
+                    )}
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <span style={{ color: ac, fontSize: 14, fontWeight: 800 }}>{it.subtotal > 0 ? `${it.subtotal.toFixed(2)}€` : "—"}</span>
+                  <button onClick={() => setForm(f => ({ ...f, items: f.items.filter((_, i) => i !== idx) }))}
+                    style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: 16 }}>✕</button>
                 </div>
               </div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <span style={{ color: ac, fontSize: 14, fontWeight: 800 }}>{it.subtotal > 0 ? `${it.subtotal.toFixed(2)}€` : "—"}</span>
-                <button onClick={() => setForm(f => ({ ...f, items: f.items.filter((_, i) => i !== idx) }))}
-                  style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: 16 }}>✕</button>
-              </div>
+
+              {/* TRAZABILIDAD, solo en los papeles de empresa.
+                  Se copia de la pegatina de la bandeja, que es donde está el
+                  dato de verdad. Va aquí y no en el selector porque estos
+                  pedidos los monta una persona a mano, con las bandejas
+                  delante: lo rellena de una pasada al final.
+                  En un ticket de particular no sale: estorbaría. */}
+              {pideFiscal(form.documento) && (
+                <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: 6, marginTop: 6 }}>
+                  <CampoLote etiqueta="Lote" valor={it.lote} tipo="text" placeholder="de la pegatina"
+                    onChange={v => cambiarItem(idx, "lote", v)} />
+                  <CampoLote etiqueta="Elaborado" valor={it.elaboracion} tipo="date"
+                    onChange={v => cambiarItem(idx, "elaboracion", v)} />
+                  <CampoLote etiqueta="Caduca" valor={it.caducidad} tipo="date"
+                    onChange={v => cambiarItem(idx, "caducidad", v)} />
+                </div>
+              )}
             </div>
           ))}
           {(parseFloat(form.envio) || 0) > 0 && (
@@ -1130,7 +1154,19 @@ function AlbaranPedido({ pedido, empresa, pedidos, onEmitir, onCerrar }) {
         <div style={{ borderTop: "2px solid #000" }} />
         {(pedido.items || []).map((it, i) => (
           <Linea key={i}
-            izq={`${it.cantidad} × ${it.nombreProducto} · ${it.presentacion} · ${preparacionDe(it)}`}
+            izq={<>
+              {it.cantidad} × {it.nombreProducto} · {it.presentacion} · {preparacionDe(it)}
+              {/* La trazabilidad, debajo de su línea: es lo que permite saber
+                  qué lote fue a qué cliente si un día hay que retirar una
+                  partida. Sale solo lo que esté puesto. */}
+              {(it.lote || it.elaboracion || it.caducidad) && (
+                <div style={{ fontSize: 11, color: "#444", marginTop: 1 }}>
+                  {it.lote && <>Lote <strong>{it.lote}</strong></>}
+                  {it.elaboracion && <> · Elab. {fechaCorta(it.elaboracion)}</>}
+                  {it.caducidad && <> · Cad. {fechaCorta(it.caducidad)}</>}
+                </div>
+              )}
+            </>}
             der={conPrecios ? euros(it.subtotal) : ""} />
         ))}
         {conPrecios && servicio > 0 && <Linea izq={fritas ? `Fritura (${fritas} bandejas)` : "Fritura"} der={euros(servicio)} />}
@@ -3701,6 +3737,25 @@ const TABS_ADMIN = [
 function cargarLS(key, fallback) {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
 }
+
+/** "2026-11-04" → "04/11/2026", que es como se leen las fechas en un papel. */
+const fechaCorta = (iso) => {
+  const [a, m, d] = String(iso || "").split("-");
+  return a && m && d ? `${d}/${m}/${a}` : String(iso || "");
+};
+
+/** Casilla pequeña de la fila de trazabilidad: cabe tres en el ancho de una. */
+const CampoLote = ({ etiqueta, valor, tipo, placeholder, onChange }) => (
+  <label style={{ display: "block" }}>
+    <span style={{ display: "block", color: TEXT_TENUE, fontSize: 10.5, fontWeight: 700,
+      textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 3 }}>{etiqueta}</span>
+    <input type={tipo} value={valor || ""} placeholder={placeholder}
+      onChange={e => onChange(e.target.value)}
+      style={{ width: "100%", background: BG_INPUT, border: `1px solid ${BORDER}`, borderRadius: 8,
+        color: TEXT_MAIN, padding: "7px 9px", fontSize: 13, fontFamily: "inherit",
+        boxSizing: "border-box", outline: "none" }} />
+  </label>
+);
 
 /**
  * La cabecera de quien vende, igual en el albarán, la factura y el resumen.
