@@ -52,6 +52,15 @@ export const EMPRESA_VACIA = {
    * en el buscador público de la AESAN.
    */
   registroSanitario: "26.027183/M",
+  /**
+   * Quién fabrica, cuando no es quien vende.
+   *
+   * En blanco significa "lo fabricamos nosotros", y así se imprime. El cliente
+   * pidió por escrito que se indique AUNQUE sea el mismo, no que se calle:
+   * callarlo deja la duda de si se está revendiendo algo de otro. Si algún día
+   * se encarga la producción fuera, se escribe aquí el nombre y sale ese.
+   */
+  fabricante: "",
   iva: 10,          // % que lleva el precio de venta dentro; lo confirma el gestor
   serie: "A",       // serie de la numeración de facturas
   /**

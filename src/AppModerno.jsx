@@ -618,11 +618,33 @@ function FormularioPedido({ productos, clientes, repartidores, pedidos, onGuarda
   // Sedes del cliente elegido, para poder cambiar a dónde va la entrega.
   const sedesCliente = clientes.find(c => c.id === form.clienteId)?.sedes || [];
 
-  const elegirSede = (nombre) => {
-    const s = sedesCliente.find(x => x.nombre === nombre);
+  /**
+   * Cómo se llama una sede en la lista: su nombre, y si no tiene, su calle.
+   *
+   * Tiene que ser EL MISMO criterio para pintar la opción y para buscarla
+   * luego. Antes la opción se pintaba con `nombre || direccion` pero se
+   * buscaba solo por `nombre`: una sede sin nombre salía en la lista, se podía
+   * pulsar, y no hacía absolutamente nada.
+   */
+  const etiquetaSede = (s) => s.nombre || s.direccion || "Sin nombre";
+
+  const elegirSede = (etiqueta) => {
+    const s = sedesCliente.find(x => etiquetaSede(x) === etiqueta);
     if (!s) return;
     setForm(f => ({
-      ...f, sede: s.nombre, direccion: s.direccion || f.direccion, cp: s.cp || f.cp,
+      ...f,
+      sede: etiquetaSede(s),
+      /**
+       * La dirección de la sede manda, y si esa sede no tiene dirección
+       * guardada se queda EN BLANCO a propósito.
+       *
+       * Antes se heredaba la anterior: cambiabas de Bolívar a Estefanita y el
+       * albarán decía "Estefanita" con la calle de Bolívar debajo. El
+       * repartidor iba al sitio equivocado y nadie veía el fallo. En blanco,
+       * el formulario no deja guardar hasta que se escriba.
+       */
+      direccion: s.direccion || "",
+      cp: s.cp || "",
       telefono: s.telefono || f.telefono,
       fiscal: { ...FISCAL_VACIO, ...f.fiscal, ...(s.contacto ? { contacto: s.contacto } : {}) },
     }));
@@ -664,7 +686,7 @@ function FormularioPedido({ productos, clientes, repartidores, pedidos, onGuarda
           rellena la dirección, que es la que acabará en el albarán. */}
       {sedesCliente.length > 1 && (
         <Chips label="Sede a la que se entrega" accent={ac}
-          options={sedesCliente.map(s => s.nombre || s.direccion)}
+          options={sedesCliente.map(etiquetaSede)}
           value={form.sede || ""} onChange={elegirSede} />
       )}
       {/* La calle y el número por un lado, el piso por otro: lo que se busca en
@@ -1079,11 +1101,29 @@ function AlbaranPedido({ pedido, empresa, pedidos, onEmitir, onCerrar }) {
             <div style={{ fontSize: 12 }}>{f.razonSocial}</div>
           )}
           {f.nif && <div style={{ fontSize: 12 }}>NIF {f.nif}</div>}
-          {/* La dirección del albarán es a dónde VA la mercancía, no la fiscal:
-              un cliente con cuatro sedes factura en una y recibe en otra. */}
-          {pedido.sede && <div style={{ fontSize: 12, fontWeight: 700 }}>Sede: {pedido.sede}</div>}
-          <div style={{ fontSize: 12 }}>{pedido.direccion || f.direccion} {pedido.cp || ""}</div>
-          {pedido.telefono && <div style={{ fontSize: 12 }}>Tel. {pedido.telefono}</div>}
+
+          {/* LAS DOS DIRECCIONES, ETIQUETADAS Y POR SEPARADO.
+              Un cliente con cuatro sedes recibe en una y factura en otra, y
+              lo pidió por escrito así. Antes se imprimía solo la de entrega y
+              la de facturación no llegaba a salir nunca: estaba guardada,
+              pero el papel la tapaba con la otra. */}
+          <div style={{ fontSize: 12, marginTop: 6 }}>
+            <span style={{ fontWeight: 700 }}>Entregar en: </span>
+            {pedido.sede ? `${pedido.sede} · ` : ""}
+            {pedido.direccion || f.direccion} {pedido.cp || ""}
+            {pedido.piso ? ` (${pedido.piso})` : ""}
+          </div>
+
+          {/* Solo si está puesta y no es la misma: repetir la dirección dos
+              veces no informa de nada y da aspecto de error. */}
+          {f.direccion && f.direccion.trim() !== String(pedido.direccion || "").trim() && (
+            <div style={{ fontSize: 12 }}>
+              <span style={{ fontWeight: 700 }}>Facturar a: </span>
+              {f.direccion} {f.cp || ""} {f.poblacion || ""}
+            </div>
+          )}
+
+          {pedido.telefono && <div style={{ fontSize: 12, marginTop: 4 }}>Tel. {pedido.telefono}</div>}
         </div>
 
         <div style={{ fontSize: 11, letterSpacing: 1, marginBottom: 2 }}>MERCANCÍA ENTREGADA</div>
@@ -3546,6 +3586,13 @@ function ModuloAdmin({ proveedores, setProveedores, compras, setCompras, gastos,
           El número con el que la cocina está dada de alta para vender a otros negocios.
           En blanco no se imprime; en cuanto lo escribas sale en los albaranes y las facturas.
         </p>
+        <Input label="Fabricante (si no sois vosotros)" value={emp.fabricante || ""}
+          onChange={e => setEmpresa({ ...emp, fabricante: e.target.value })}
+          placeholder="Déjalo vacío si lo hacéis vosotros" />
+        <p style={{ color: TEXT_SUB, fontSize: 12, margin: "-8px 0 14px", lineHeight: 1.5 }}>
+          En los albaranes sale siempre quién fabrica, porque los clientes lo piden.
+          Vacío se imprime «Fabricante: el mismo proveedor».
+        </p>
         <Input label="IVA que llevan los precios dentro (%)" type="number" min="0" step="1" value={emp.iva}
           onChange={e => setEmpresa({ ...emp, iva: e.target.value })} placeholder="10" />
         {/* El último paso, y el que no se puede dar sin el gestor: tener el CIF
@@ -3680,6 +3727,10 @@ function MembreteEmpresa({ emp }) {
         {emp.registroSanitario && (
           <div style={{ fontSize: 12 }}>Reg. Sanitario {emp.registroSanitario}</div>
         )}
+        {/* Quién fabrica. Se dice siempre, también cuando somos nosotros. */}
+        <div style={{ fontSize: 12 }}>
+          Fabricante: {emp.fabricante?.trim() || "el mismo proveedor"}
+        </div>
       </div>
     </div>
   );
