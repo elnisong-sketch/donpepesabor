@@ -33,7 +33,8 @@
       "Bash(node limpiar.mjs)",
       "Bash(python -)",
       "Bash(npx -y firebase-tools deploy --only firestore:rules,hosting)",
-      "Bash(npx -y firebase-tools deploy --only firestore:rules)"
+      "Bash(npx -y firebase-tools deploy --only firestore:rules)",
+      "WebSearch"
     ]
   },
   "hooks": {

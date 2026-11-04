@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { auth, db } from "./firebase";
 import { EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
 import { collection, deleteDoc, doc, onSnapshot, setDoc } from "firebase/firestore";
-import { DIRECCION_LOCAL, bandejasFritas, bandejasPorProducto, compararDias, enlaceConfirmacion, fechaLegible, formasPagoDe, pagosDe, preparacionDe, quienEntrega, siguienteCodigo, totalesPedido, whatsappDe } from "./pedidos.js";
+import { DIRECCION_LOCAL, bandejasFritas, bandejasPorProducto, compararDias, enlaceConfirmacion, fechaLegible, formasPagoDe, pagosDe, preparacionDe, quienEntrega, siguienteAlbaran, siguienteCodigo, totalesPedido, whatsappDe } from "./pedidos.js";
 import {
   DOCUMENTOS, EMPRESA_VACIA, FISCAL_VACIO, desglosaIva, empresaLista, fusionaEmpresa,
   faltaParaFacturar, mesLegible, pideFiscal, textoDocumento,
@@ -981,7 +981,7 @@ function BotonEnviar({ texto, asunto, telefono, accent, abierto, setAbierto }) {
  * de empujarlos: en una pantalla de móvil, siete botones en una línea acaban
  * unos sobre otros.
  */
-function PieDocumento({ texto, asunto, telefono, accent, onCerrar, onImprimir, etiquetaImprimir = "🖨️ Imprimir" }) {
+function PieDocumento({ texto, asunto, telefono, accent, onCerrar, onImprimir, onEnviar, etiquetaImprimir = "🖨️ Imprimir" }) {
   const [enviar, setEnviar] = useState(false);
   return (
     <>
@@ -989,7 +989,11 @@ function PieDocumento({ texto, asunto, telefono, accent, onCerrar, onImprimir, e
         abierto={enviar} setAbierto={setEnviar} />
       <div className="pie-documento">
         <Btn variant="secondary" onClick={onCerrar}>Cerrar</Btn>
-        <Btn variant="secondary" onClick={() => setEnviar(v => !v)}>{enviar ? "▴ Enviar" : "📤 Enviar"}</Btn>
+        {/* `onEnviar` lo usa el albarán para quedarse con su número al abrir
+            las opciones de envío: a partir de ahí el papel ya existe fuera. */}
+        <Btn variant="secondary" onClick={() => { if (!enviar) onEnviar?.(); setEnviar(v => !v); }}>
+          {enviar ? "▴ Enviar" : "📤 Enviar"}
+        </Btn>
         <Btn accent={accent} onClick={onImprimir}>{etiquetaImprimir}</Btn>
       </div>
     </>
@@ -1007,15 +1011,30 @@ function PieDocumento({ texto, asunto, telefono, accent, onCerrar, onImprimir, e
  * Puede ir sin precios: muchas veces lo firma un cocinero o un camarero, que no
  * tiene por qué ver lo que paga su jefe.
  */
-function AlbaranPedido({ pedido, empresa, onCerrar }) {
+function AlbaranPedido({ pedido, empresa, pedidos, onEmitir, onCerrar }) {
   const ac = ACENTOS.pedidos;
   const { productos, servicio, envio, total } = totalesPedido(pedido);
   const fritas = bandejasFritas(pedido);
   const f = { ...FISCAL_VACIO, ...(pedido.fiscal || {}) };
   const conPrecios = !pedido.albaranSinPrecios;
   const euros = n => (n || 0).toFixed(2) + " €";
-  const numero = pedido.codigo || `#${String(pedido.id).slice(-4).toUpperCase()}`;
+  const codigoPedido = pedido.codigo || `#${String(pedido.id).slice(-4).toUpperCase()}`;
   const emp = fusionaEmpresa(empresa);
+
+  /**
+   * El número de albarán, que no es el del pedido.
+   *
+   * Si ya está emitido, se enseña el suyo y no se toca jamás. Si no, se
+   * enseña el que le tocaría, avisando de que todavía no está puesto: se
+   * asigna al imprimir o al enviar, para no gastar números solo con mirar.
+   */
+  const emitido = !!pedido.albaran?.numero;
+  const numero = pedido.albaran?.numero || siguienteAlbaran(pedido.fecha, pedidos);
+
+  const emitir = (accion) => () => {
+    if (!emitido) onEmitir(pedido.id, { numero, fecha: hoy() });
+    accion();
+  };
 
   const Linea = ({ izq, der, fuerte }) => (
     <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "6px 0",
@@ -1045,6 +1064,9 @@ function AlbaranPedido({ pedido, empresa, onCerrar }) {
             <div style={{ fontSize: 11, letterSpacing: 2 }}>ALBARÁN</div>
             <div style={{ fontSize: 24, fontWeight: 700, lineHeight: 1.1 }}>{numero}</div>
             <div style={{ fontSize: 12 }}>{fechaLegible(pedido.fecha)}</div>
+            {/* El número del pedido se queda, en pequeño: son dos cosas
+                distintas y a veces hay que casarlas. */}
+            <div style={{ fontSize: 11, color: "#555" }}>Pedido {codigoPedido}</div>
           </div>
         </div>
 
@@ -1103,10 +1125,20 @@ function AlbaranPedido({ pedido, empresa, onCerrar }) {
         </div>
       </div>
 
+      {!emitido && (
+        <p style={{ color: TEXT_SUB, fontSize: 12.5, margin: "12px 0 0", lineHeight: 1.5 }}>
+          Este albarán todavía no está emitido. Se quedará con el número{" "}
+          <strong style={{ color: TEXT_MAIN }}>{numero}</strong> en cuanto lo imprimas o lo envíes,
+          y a partir de ahí ya no cambia.
+        </p>
+      )}
+
       <PieDocumento accent={ac} telefono={pedido.telefono}
         asunto={`Albarán ${numero} · ${emp.nombre}`}
         texto={textoDocumento(pedido, empresa, "Albarán")}
-        onCerrar={onCerrar} onImprimir={() => window.print()} />
+        onCerrar={onCerrar}
+        onEnviar={emitir(() => {})}
+        onImprimir={emitir(() => window.print())} />
     </Modal>
   );
 }
@@ -1348,6 +1380,16 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
   const [editar, setEditar] = useState(null);
   const [facturaPedido, setFacturaPedido] = useState(null);
   const [albaranPedido, setAlbaranPedido] = useState(null);
+
+  /**
+   * Guarda el número del albarán en el pedido, la primera y única vez.
+   *
+   * La condición de dentro no sobra: si se pulsa imprimir dos veces, o
+   * imprimir y luego enviar, el número no se vuelve a calcular. Un albarán
+   * que ya salió por la puerta con un número no puede cambiar de número.
+   */
+  const emitirAlbaran = (id, albaran) => setPedidos(ps => ps.map(p =>
+    p.id === id && !p.albaran?.numero ? { ...p, albaran } : p));
   const [ticketPedido, setTicketPedido] = useState(null);
   const [resumenMes, setResumenMes] = useState(false);
   const [expandido, setExpandido] = useState(null);   // id del pedido abierto
@@ -1466,7 +1508,21 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
     });
   };
 
-  const eliminar = (id) => { if (confirm("¿Eliminar pedido?")) setPedidos(p => p.filter(x => x.id !== id)); };
+  /**
+   * Borrar un pedido. Si su albarán ya se emitió, se avisa con el número
+   * delante: ese papel está en manos del cliente y lo más probable es que
+   * haya que anularlo con él, no borrarlo aquí y ya está. Además, si era el
+   * último de la serie, el siguiente albarán reutilizaría su número.
+   */
+  const eliminar = (id) => {
+    const p = pedidos.find(x => x.id === id);
+    const aviso = p?.albaran?.numero
+      ? `Este pedido tiene emitido el albarán ${p.albaran.numero}, que ya está en manos del cliente.\n\n` +
+        `Si lo borras, ese número queda suelto y el próximo albarán podría repetirlo. ` +
+        `Para una entrega que no se hizo suele ser mejor pasarla a Cancelado.\n\n¿Borrarlo de todas formas?`
+      : "¿Eliminar pedido?";
+    if (confirm(aviso)) setPedidos(ps => ps.filter(x => x.id !== id));
+  };
   const [estadoPendiente, setEstadoPendiente] = useState(null); // { id, estado }
   const cambiarEstado = (id, estado) => setEstadoPendiente({ id, estado });
   const confirmarEstado = () => {
@@ -1738,7 +1794,11 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
           onGuardar={guardar} onCerrar={() => { setModal(false); setEditar(null); }} pedidoEditar={editar} />
       )}
       {facturaPedido && <FacturaPedido pedido={facturaPedido} empresa={empresa} onCerrar={() => setFacturaPedido(null)} />}
-      {albaranPedido && <AlbaranPedido pedido={albaranPedido} empresa={empresa} onCerrar={() => setAlbaranPedido(null)} />}
+      {albaranPedido && (
+        <AlbaranPedido pedido={pedidos.find(p => p.id === albaranPedido.id) || albaranPedido}
+          empresa={empresa} pedidos={pedidos} onEmitir={emitirAlbaran}
+          onCerrar={() => setAlbaranPedido(null)} />
+      )}
       {resumenMes && <ResumenMes pedidos={pedidos} empresa={empresa} onCerrar={() => setResumenMes(false)} />}
       {ticketPedido && <TicketPedido pedido={ticketPedido} repartidores={repartidores} onCerrar={() => setTicketPedido(null)} />}
 

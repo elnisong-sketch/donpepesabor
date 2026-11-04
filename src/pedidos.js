@@ -66,6 +66,36 @@ export function fechaLegible(iso) {
 export const DIRECCION_LOCAL = "Calle Berrocal 7, local 3, 28021 Madrid";
 
 /**
+ * NUMERACIÓN DE ALBARANES.
+ *
+ * El albarán llevaba el número del PEDIDO (P261104-01), y eso no sirve como
+ * numeración de albarán por dos motivos: se reinicia cada día, y solo algunos
+ * pedidos llevan albarán, así que al cliente le llegaban números con huecos
+ * enormes y sin forma de saber si le faltaba alguno.
+ *
+ * Ahora hay una serie propia, continua y por año: 2026/0001, 2026/0002…
+ *
+ * El número SE ASIGNA AL EMITIRLO —al imprimir o al enviar—, no al abrir la
+ * pantalla: así no se gastan números mirando. Y una vez puesto no cambia
+ * nunca, pase lo que pase con el resto de pedidos. Eso es lo que permite que
+ * la factura de fin de mes diga "albaranes 17, 23 y 31" y que siga
+ * significando lo mismo dentro de dos años.
+ *
+ * Que conste: el albarán NO es un documento fiscal y la ley no obliga a
+ * numerarlo de ninguna forma concreta. Esto es orden, no Hacienda.
+ */
+export function siguienteAlbaran(fecha, pedidos = []) {
+  const año = String(fecha || "").slice(0, 4) || String(new Date().getFullYear());
+  const usados = (pedidos || [])
+    .map((p) => String(p?.albaran?.numero || ""))
+    .filter((n) => n.startsWith(`${año}/`))
+    .map((n) => parseInt(n.slice(año.length + 1), 10))
+    .filter((n) => Number.isFinite(n));
+  const siguiente = (usados.length ? Math.max(...usados) : 0) + 1;
+  return `${año}/${String(siguiente).padStart(4, "0")}`;
+}
+
+/**
  * Las bandejas de unos pedidos, agrupadas por producto y de más a menos.
  *
  * Es lo que hace falta antes de salir: qué se carga en el coche. Lo usan el
