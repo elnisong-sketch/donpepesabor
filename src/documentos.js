@@ -37,10 +37,13 @@ export const EMPRESA_VACIA = {
    * Número de Registro General Sanitario de Empresas Alimentarias (RGSEAA).
    *
    * Es lo que acredita que la cocina está dada de alta para elaborar y vender
-   * a otros negocios. En blanco no se imprime: en cuanto se escriba en
-   * Administración, sale en el albarán y en la factura.
+   * a otros negocios, y es lo que mira una inspección en casa del cliente.
+   *
+   * Alta del 23/10/2026 a nombre de INVERSIONES AYALA 1992 S.L., para comidas
+   * preparadas y productos transformados a base de carne. Se puede comprobar
+   * en el buscador público de la AESAN.
    */
-  registroSanitario: "",
+  registroSanitario: "26.027183/M",
   iva: 10,          // % que lleva el precio de venta dentro; lo confirma el gestor
   serie: "A",       // serie de la numeración de facturas
   /**
