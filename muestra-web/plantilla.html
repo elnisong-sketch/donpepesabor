@@ -28,6 +28,11 @@
     background: var(--tostado);
   }
 
+  /* El relleno cuenta dentro del ancho. Sin esto, un botón "al 100 %" con
+     relleno a los lados mide más que su caja y se sale por la derecha en el
+     móvil: pasaba con el de WhatsApp de la hoja del pedido. */
+  *, *::before, *::after { box-sizing: border-box; }
+
   body {
     background: var(--tostado);
     color: var(--crema);
@@ -47,106 +52,67 @@
   h1, h2, h3 { font-family: var(--display); font-weight: 900; line-height: 1.02; margin: 0; text-wrap: balance; }
   p { margin: 0; }
   ul { list-style: none; margin: 0; padding: 0; }
-
   a { color: var(--oro); }
   :focus-visible { outline: 2px solid var(--oro); outline-offset: 3px; border-radius: 2px; }
 
   /* ── Arranque ─────────────────────────────────────────────────────────── */
   .arranque { padding-block: 34px 10px; }
-
   .marca { display: flex; align-items: center; gap: 13px; }
   .marca img { width: 54px; height: 54px; flex: none; }
   .marca b { font-family: var(--display); font-weight: 800; font-size: 19px; letter-spacing: -.01em; }
   .marca span { display: block; font-size: 11.5px; color: var(--arena); letter-spacing: .14em; font-weight: 700; }
 
-  .titular {
-    font-size: clamp(2.6rem, 9vw, 5.2rem);
-    letter-spacing: -.035em;
-    margin-top: 42px;
-    max-width: 14ch;
-  }
+  .titular { font-size: clamp(2.6rem, 9vw, 5.2rem); letter-spacing: -.035em; margin-top: 42px; max-width: 14ch; }
   .titular em { font-style: normal; color: var(--oro); }
-
   .entradilla { margin-top: 22px; max-width: 46ch; color: var(--arena); font-size: 1.07rem; }
 
-  .acciones { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 22px; margin-top: 30px; }
-
-  .wasap {
-    display: inline-flex; align-items: center; gap: 9px;
-    background: var(--oro); color: #241001;
-    font-family: var(--display); font-weight: 800; font-size: 15px;
-    padding: 14px 22px; border-radius: 999px; text-decoration: none;
-  }
-  .wasap svg { width: 19px; height: 19px; fill: currentColor; }
-  .telefono { font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: .01em; }
-  .telefono small { display: block; font-weight: 500; font-size: 12.5px; color: var(--arena); letter-spacing: 0; }
-
-  .foto-arranque {
-    margin-top: 44px; border-radius: 18px; overflow: hidden;
-    aspect-ratio: 16 / 9; max-width: 100%; background: var(--marron);
-  }
+  .foto-arranque { margin-top: 36px; border-radius: 18px; overflow: hidden; aspect-ratio: 16 / 9; max-width: 100%; background: var(--marron); }
   .foto-arranque img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
   /* ── Secciones ────────────────────────────────────────────────────────── */
-  .seccion { padding-block: 64px; }
+  .seccion { padding-block: 60px; }
   .seccion > h2 { font-size: clamp(1.75rem, 4.4vw, 2.5rem); letter-spacing: -.03em; }
   .seccion > h2 + p { margin-top: 14px; max-width: 52ch; color: var(--arena); }
 
-  /* ── El interruptor congelado / frito ─────────────────────────────────── */
-  .como {
-    display: inline-flex; gap: 4px; margin-top: 26px; padding: 4px;
-    background: var(--marron); border-radius: 999px; border: 1px solid var(--brasa);
-  }
-  .como button {
-    border: none; background: none; color: var(--arena); cursor: pointer;
-    font-family: var(--texto); font-size: 14.5px; font-weight: 700;
-    padding: 10px 18px; border-radius: 999px; line-height: 1.25; text-align: left;
-  }
+  /* ── Interruptor congelado / frito ────────────────────────────────────── */
+  .como { display: inline-flex; gap: 4px; margin-top: 26px; padding: 4px; background: var(--marron); border-radius: 999px; border: 1px solid var(--brasa); }
+  .como button { border: none; background: none; color: var(--arena); cursor: pointer; font-family: var(--texto); font-size: 14.5px; font-weight: 700; padding: 10px 18px; border-radius: 999px; line-height: 1.25; text-align: left; }
   .como button small { display: block; font-weight: 500; font-size: 12px; opacity: .8; }
   .como button[aria-pressed="true"] { background: var(--oro); color: #241001; }
-  @media (prefers-reduced-motion: no-preference) {
-    .como button { transition: background .18s ease, color .18s ease; }
-  }
-
-  .nota-fritura { margin-top: 16px; font-size: 14.5px; color: var(--arena); max-width: 54ch; }
+  @media (prefers-reduced-motion: no-preference) { .como button { transition: background .18s ease, color .18s ease; } }
+  .nota-fritura { margin-top: 16px; font-size: 14.5px; color: var(--arena); max-width: 56ch; }
 
   /* ── La carta ─────────────────────────────────────────────────────────── */
-  .familia { margin-top: 54px; }
+  .familia { margin-top: 50px; }
   .familia-cab { display: flex; align-items: center; gap: 16px; }
   .familia-cab img { width: 62px; height: 62px; border-radius: 12px; object-fit: cover; flex: none; }
   .familia-cab h3 { font-size: 1.45rem; letter-spacing: -.02em; }
   .familia-cab p { font-size: 13.5px; color: var(--arena); margin-top: 3px; }
 
-  .platos { margin-top: 20px; }
-  .plato {
-    display: grid; grid-template-columns: 58px 1fr auto;
-    align-items: baseline; gap: 0 16px;
-    padding: 13px 0; border-top: 1px solid var(--brasa);
-  }
-  .uds {
-    font-family: var(--display); font-weight: 900; font-size: 1.5rem;
-    color: var(--oro); font-variant-numeric: tabular-nums; line-height: 1;
-  }
+  .platos { margin-top: 18px; }
+  .plato { display: grid; grid-template-columns: 54px 1fr auto auto; align-items: center; gap: 0 14px; padding: 11px 0; border-top: 1px solid var(--brasa); }
+  .uds { font-family: var(--display); font-weight: 900; font-size: 1.5rem; color: var(--oro); font-variant-numeric: tabular-nums; line-height: 1; }
   .uds small { display: block; font-family: var(--texto); font-size: 10.5px; font-weight: 700; color: var(--arena); letter-spacing: .1em; margin-top: 3px; }
-  .plato-nombre { min-width: 0; font-weight: 500; }
-  .plato-nombre b { display: block; font-weight: 700; }
-  .plato-nombre span { font-size: 13px; color: var(--arena); }
-  .precio {
-    font-family: var(--display); font-weight: 800; font-size: 1.22rem;
-    font-variant-numeric: tabular-nums; white-space: nowrap;
-  }
+  .plato-nombre { min-width: 0; font-weight: 700; }
+  .plato-nombre span { display: block; font-size: 13px; color: var(--arena); font-weight: 500; }
+  .precio { font-family: var(--display); font-weight: 800; font-size: 1.18rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  .sumar { width: 42px; height: 42px; flex: none; border-radius: 12px; cursor: pointer;
+           background: var(--marron); border: 1.5px solid var(--brasa); color: var(--oro);
+           font-size: 23px; line-height: 1; font-family: var(--texto); display: grid; place-items: center; }
+  .sumar:hover { border-color: var(--oro); }
+  .sumar[data-puestas]::after { content: attr(data-puestas); position: absolute; }
+  .plato.puesto .sumar { background: var(--oro); border-color: var(--oro); color: #241001; font-size: 15px; font-weight: 800; }
 
   /* ── Cómo llega ───────────────────────────────────────────────────────── */
   .reparto { display: grid; grid-template-columns: repeat(auto-fit, minmax(255px, 1fr)); gap: 30px; margin-top: 34px; }
   .reparto h3 { font-size: 1.12rem; letter-spacing: -.01em; }
   .reparto p { margin-top: 9px; color: var(--arena); font-size: 15px; }
   .reparto b { color: var(--crema); }
-
   .horario { margin-top: 14px; font-size: 15px; }
   .horario li { display: flex; justify-content: space-between; gap: 18px; padding: 7px 0; border-top: 1px solid var(--brasa); }
   .horario span:first-child { color: var(--arena); }
   .horario span:last-child { font-variant-numeric: tabular-nums; text-align: right; }
-  .horario .cerrado { color: var(--arena); }
 
   /* ── Próximamente ─────────────────────────────────────────────────────── */
   .pronto { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 22px; margin-top: 30px; }
@@ -161,10 +127,96 @@
   .pie h4 { font-family: var(--display); font-weight: 800; font-size: 13px; margin: 0 0 8px; letter-spacing: .02em; }
   .pie p, .pie address { font-style: normal; color: var(--arena); font-size: 14.5px; }
   .pie .legal { margin-top: 30px; font-size: 12.5px; color: #8c745c; }
+  .telefono { font-variant-numeric: tabular-nums; font-weight: 700; }
+
+  /* ── Barra del pedido, pegada abajo ───────────────────────────────────── */
+  .barra {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+    background: var(--marron); border-top: 1px solid var(--brasa);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .barra-dentro {
+    max-width: 1020px; margin-inline: auto; display: flex; align-items: center; gap: 14px;
+    padding-block: 12px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .barra-cuenta { flex: 1; min-width: 0; font-size: 14px; color: var(--arena); line-height: 1.3; }
+  .barra-cuenta b { display: block; color: var(--crema); font-family: var(--display); font-weight: 800; font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+
+  .boton-oro {
+    background: var(--oro); color: #241001; border: none; cursor: pointer;
+    font-family: var(--display); font-weight: 800; font-size: 15px;
+    padding: 13px 20px; border-radius: 999px; text-decoration: none;
+    display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+  }
+  .boton-oro svg { width: 19px; height: 19px; fill: currentColor; flex: none; }
+  .boton-oro[disabled] { opacity: .45; cursor: not-allowed; }
+
+  /* ── Hoja del pedido ──────────────────────────────────────────────────── */
+  .velo { position: fixed; inset: 0; background: rgba(10,4,0,.72); z-index: 40; }
+  .hoja {
+    position: fixed; z-index: 41; left: 0; right: 0; bottom: 0; top: auto;
+    max-height: 92vh; overflow-y: auto;
+    background: var(--tostado); border-top: 1px solid var(--brasa);
+    border-radius: 20px 20px 0 0;
+    padding-bottom: calc(26px + env(safe-area-inset-bottom, 0px));
+  }
+  .hoja-dentro {
+    max-width: 620px; margin-inline: auto; padding-block: 22px 0;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  @media (min-width: 680px) {
+    .hoja { top: 50%; bottom: auto; left: 50%; right: auto; transform: translate(-50%, -50%);
+            width: min(620px, calc(100% - 40px)); border-radius: 20px; border: 1px solid var(--brasa); }
+  }
+  .hoja-cab { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; }
+  .hoja-cab h2 { font-size: 1.5rem; letter-spacing: -.02em; }
+  .cerrar { background: none; border: none; color: var(--arena); font-size: 24px; cursor: pointer; line-height: 1; padding: 0 4px; font-family: var(--texto); }
+
+  .linea { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 0 12px; padding: 13px 0; border-top: 1px solid var(--brasa); }
+  .linea-nombre { min-width: 0; font-weight: 700; font-size: 15px; }
+  .linea-nombre span { display: block; font-weight: 500; font-size: 12.5px; color: var(--arena); }
+  .contador { display: inline-flex; align-items: center; gap: 2px; background: var(--marron); border: 1px solid var(--brasa); border-radius: 999px; }
+  .contador button { width: 32px; height: 32px; background: none; border: none; color: var(--crema); font-size: 18px; cursor: pointer; font-family: var(--texto); line-height: 1; }
+  .contador b { min-width: 22px; text-align: center; font-variant-numeric: tabular-nums; font-size: 14px; }
+  .linea-precio { font-family: var(--display); font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 15px; }
+
+  .suma { display: flex; justify-content: space-between; align-items: baseline; gap: 14px; margin-top: 18px; padding-top: 16px; border-top: 2px solid var(--brasa); }
+  .suma span { font-family: var(--display); font-weight: 900; font-size: 1.1rem; }
+  .suma b { font-family: var(--display); font-weight: 900; font-size: 1.6rem; color: var(--oro); font-variant-numeric: tabular-nums; }
+
+  .campos { margin-top: 24px; display: grid; gap: 14px; }
+  .campo label { display: block; font-size: 12.5px; font-weight: 700; color: var(--arena); margin-bottom: 6px; }
+  .campo input, .campo textarea {
+    width: 100%; box-sizing: border-box; background: var(--marron); color: var(--crema);
+    border: 1.5px solid var(--brasa); border-radius: 11px; padding: 12px 14px;
+    font-family: var(--texto); font-size: 16px;
+  }
+  .campo textarea { resize: vertical; min-height: 62px; }
+  .dos { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .opciones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .opcion {
+    background: var(--marron); border: 1.5px solid var(--brasa); color: var(--crema);
+    border-radius: 11px; padding: 11px 12px; cursor: pointer; font-family: var(--texto);
+    font-size: 14px; font-weight: 700; text-align: center; line-height: 1.3;
+  }
+  .opcion small { display: block; font-weight: 500; font-size: 11.5px; color: var(--arena); }
+  .opcion[aria-pressed="true"] { background: var(--oro); border-color: var(--oro); color: #241001; }
+  .opcion[aria-pressed="true"] small { color: #5a3303; }
+
+  .aviso { margin-top: 14px; font-size: 13.5px; color: var(--oro); font-weight: 700; }
+  .vacio { color: var(--arena); padding: 22px 0; text-align: center; }
+  .pie-hoja { margin-top: 20px; display: grid; gap: 10px; }
+  .pie-hoja .boton-oro { width: 100%; padding-block: 15px; }
+  .letra-chica { font-size: 12.5px; color: var(--arena); text-align: center; }
 
   @media (max-width: 560px) {
-    .plato { grid-template-columns: 50px 1fr auto; gap: 0 12px; }
+    .plato { grid-template-columns: 46px 1fr auto auto; gap: 0 10px; }
+    .uds { font-size: 1.3rem; }
     .como { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+    .dos { grid-template-columns: 1fr; }
   }
 </style>
 
@@ -184,14 +236,6 @@
     en Calle Berrocal, y los llevamos a cualquier punto de Madrid.
   </p>
 
-  <div class="acciones">
-    <a class="wasap" href="https://wa.me/34604136371">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 00-8.6 15.1L2 22l5-1.3A10 10 0 1012 2zm0 18.2a8.2 8.2 0 01-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1112 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 01-3.3-2.9c-.3-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 00-.7.3 3 3 0 00-.9 2.2 5.2 5.2 0 001.1 2.7 11.8 11.8 0 004.5 4c1.7.7 2.4.8 3.2.6a2.8 2.8 0 001.8-1.3 2.3 2.3 0 00.2-1.3c-.1-.1-.3-.2-.5-.3z"/></svg>
-      Pedir por WhatsApp
-    </a>
-    <p class="telefono">604 136 371<small>Escríbenos y te confirmamos el día</small></p>
-  </div>
-
   <div class="foto-arranque"><img src="__HERO__" alt="Tequeños recién hechos, abiertos, con el queso estirándose"></div>
 </div>
 
@@ -199,107 +243,86 @@
   <h2>Todo va por bandejas.</h2>
   <p>
     Aquí no se vende la unidad: se vende la bandeja, que es lo que hace falta
-    cuando hay gente en casa. Tú eliges cómo te la llevas.
+    cuando hay gente en casa. Elige cómo te la llevas y ve sumando.
   </p>
 
-  <div class="como" role="group" aria-label="Cómo quieres la bandeja">
-    <button type="button" id="congelado" aria-pressed="true">
-      Congelado<small>Para freír en casa</small>
-    </button>
-    <button type="button" id="frito" aria-pressed="false">
-      Frito<small>Listo para comer</small>
-    </button>
+  <div class="como" role="group" aria-label="Cómo quieres las bandejas">
+    <button type="button" id="congelado" aria-pressed="true">Congelado<small>Para freír en casa</small></button>
+    <button type="button" id="frito" aria-pressed="false">Frito<small>Listo para comer</small></button>
   </div>
 
   <p class="nota-fritura" id="notaFritura">
-    Los precios son de la bandeja congelada, para que la frías tú.
+    Los precios son de la bandeja congelada, para que la frías tú. Lo que añadas
+    al pedido se guarda así; puedes cambiar de opción y seguir sumando.
   </p>
 
   <section class="familia">
     <div class="familia-cab">
       <img src="__TEQ__" alt="">
-      <div>
-        <h3>Tequeños</h3>
-        <p>Masa fina y queso que estira. El clásico de la casa.</p>
-      </div>
+      <div><h3>Tequeños</h3><p>Masa fina y queso que estira. El clásico de la casa.</p></div>
     </div>
-    <ul class="platos">
-      <li class="plato"><span class="uds">25<small>UDS</small></span><span class="plato-nombre"><b>Tradicionales</b></span><span class="precio" data-base="12" data-uds="25">12 €</span></li>
-      <li class="plato"><span class="uds">50<small>UDS</small></span><span class="plato-nombre"><b>Tradicionales</b><span>La bandeja grande, para fiesta</span></span><span class="precio" data-base="24" data-uds="50">24 €</span></li>
-      <li class="plato"><span class="uds">25<small>UDS</small></span><span class="plato-nombre"><b>Tradicionales con orégano y aceite de oliva</b></span><span class="precio" data-base="22" data-uds="25">22 €</span></li>
-      <li class="plato"><span class="uds">25<small>UDS</small></span><span class="plato-nombre"><b>Jamón y queso</b></span><span class="precio" data-base="22" data-uds="25">22 €</span></li>
-      <li class="plato"><span class="uds">25<small>UDS</small></span><span class="plato-nombre"><b>Guayaba y queso</b></span><span class="precio" data-base="22" data-uds="25">22 €</span></li>
-      <li class="plato"><span class="uds">25<small>UDS</small></span><span class="plato-nombre"><b>Chocolate</b></span><span class="precio" data-base="22" data-uds="25">22 €</span></li>
-      <li class="plato"><span class="uds">25<small>UDS</small></span><span class="plato-nombre"><b>Plátano con queso</b></span><span class="precio" data-base="20" data-uds="25">20 €</span></li>
-      <li class="plato"><span class="uds">25<small>UDS</small></span><span class="plato-nombre"><b>Salchicha</b></span><span class="precio" data-base="20" data-uds="25">20 €</span></li>
+    <ul class="platos" data-familia="Tequeños">
+      <li class="plato" data-nombre="Tequeños Tradicionales" data-base="12" data-uds="25"></li>
+      <li class="plato" data-nombre="Tequeños Tradicionales" data-base="24" data-uds="50" data-apunte="La bandeja grande, para fiesta"></li>
+      <li class="plato" data-nombre="Tequeños Tradicionales con orégano y aceite de oliva" data-base="22" data-uds="25"></li>
+      <li class="plato" data-nombre="Tequeños de jamón y queso" data-base="22" data-uds="25"></li>
+      <li class="plato" data-nombre="Tequeños de guayaba y queso" data-base="22" data-uds="25"></li>
+      <li class="plato" data-nombre="Tequeños de chocolate" data-base="22" data-uds="25"></li>
+      <li class="plato" data-nombre="Tequeños de plátano con queso" data-base="20" data-uds="25"></li>
+      <li class="plato" data-nombre="Tequeños de salchicha" data-base="20" data-uds="25"></li>
     </ul>
   </section>
 
   <section class="familia">
     <div class="familia-cab">
       <img src="__PAS__" alt="">
-      <div>
-        <h3>Pastelitos</h3>
-        <p>Treinta por bandeja, todos al mismo precio.</p>
-      </div>
+      <div><h3>Pastelitos</h3><p>Treinta por bandeja, todos al mismo precio.</p></div>
     </div>
-    <ul class="platos">
-      <li class="plato"><span class="uds">30<small>UDS</small></span><span class="plato-nombre"><b>Pollo</b></span><span class="precio" data-base="22" data-uds="30">22 €</span></li>
-      <li class="plato"><span class="uds">30<small>UDS</small></span><span class="plato-nombre"><b>Pollo con queso amarillo</b></span><span class="precio" data-base="22" data-uds="30">22 €</span></li>
-      <li class="plato"><span class="uds">30<small>UDS</small></span><span class="plato-nombre"><b>Carne molida</b></span><span class="precio" data-base="22" data-uds="30">22 €</span></li>
-      <li class="plato"><span class="uds">30<small>UDS</small></span><span class="plato-nombre"><b>Carne mechada</b></span><span class="precio" data-base="22" data-uds="30">22 €</span></li>
-      <li class="plato"><span class="uds">30<small>UDS</small></span><span class="plato-nombre"><b>Carne mechada con queso amarillo</b></span><span class="precio" data-base="22" data-uds="30">22 €</span></li>
-      <li class="plato"><span class="uds">30<small>UDS</small></span><span class="plato-nombre"><b>Jamón y queso</b></span><span class="precio" data-base="22" data-uds="30">22 €</span></li>
+    <ul class="platos" data-familia="Pastelitos">
+      <li class="plato" data-nombre="Pastelitos de pollo" data-base="22" data-uds="30"></li>
+      <li class="plato" data-nombre="Pastelitos de pollo con queso amarillo" data-base="22" data-uds="30"></li>
+      <li class="plato" data-nombre="Pastelitos de carne molida" data-base="22" data-uds="30"></li>
+      <li class="plato" data-nombre="Pastelitos de carne mechada" data-base="22" data-uds="30"></li>
+      <li class="plato" data-nombre="Pastelitos de carne mechada con queso amarillo" data-base="22" data-uds="30"></li>
+      <li class="plato" data-nombre="Pastelitos de jamón y queso" data-base="22" data-uds="30"></li>
     </ul>
   </section>
 
   <section class="familia">
     <div class="familia-cab">
       <img src="__EMP__" alt="">
-      <div>
-        <h3>Empanadas</h3>
-        <p>De maíz, cerradas a mano, veinticinco por bandeja.</p>
-      </div>
+      <div><h3>Empanadas</h3><p>De maíz, cerradas a mano, veinticinco por bandeja.</p></div>
     </div>
-    <ul class="platos">
-      <li class="plato"><span class="uds">25<small>UDS</small></span><span class="plato-nombre"><b>Carne molida</b></span><span class="precio" data-base="21" data-uds="25">21 €</span></li>
-      <li class="plato"><span class="uds">25<small>UDS</small></span><span class="plato-nombre"><b>Carne mechada</b></span><span class="precio" data-base="21" data-uds="25">21 €</span></li>
-      <li class="plato"><span class="uds">25<small>UDS</small></span><span class="plato-nombre"><b>Pollo</b></span><span class="precio" data-base="21" data-uds="25">21 €</span></li>
-      <li class="plato"><span class="uds">25<small>UDS</small></span><span class="plato-nombre"><b>Jamón y queso</b></span><span class="precio" data-base="21" data-uds="25">21 €</span></li>
-      <li class="plato"><span class="uds">25<small>UDS</small></span><span class="plato-nombre"><b>Queso</b></span><span class="precio" data-base="21" data-uds="25">21 €</span></li>
+    <ul class="platos" data-familia="Empanadas">
+      <li class="plato" data-nombre="Empanadas de carne molida" data-base="21" data-uds="25"></li>
+      <li class="plato" data-nombre="Empanadas de carne mechada" data-base="21" data-uds="25"></li>
+      <li class="plato" data-nombre="Empanadas de pollo" data-base="21" data-uds="25"></li>
+      <li class="plato" data-nombre="Empanadas de jamón y queso" data-base="21" data-uds="25"></li>
+      <li class="plato" data-nombre="Empanadas de queso" data-base="21" data-uds="25"></li>
     </ul>
   </section>
 
   <section class="familia">
     <div class="familia-cab">
       <img src="__CAC__" alt="">
-      <div>
-        <h3>Cachitos</h3>
-        <p>Horneados, no fritos. Salen del horno tal cual te los llevas.</p>
-      </div>
+      <div><h3>Cachitos</h3><p>Horneados, no fritos. Salen del horno tal cual te los llevas.</p></div>
     </div>
-    <ul class="platos">
-      <li class="plato"><span class="uds">6<small>UDS</small></span><span class="plato-nombre"><b>Cachitos de jamón</b></span><span class="precio" data-base="18" data-uds="6" data-horneado="1">18 €</span></li>
+    <ul class="platos" data-familia="Cachitos">
+      <li class="plato" data-nombre="Cachitos de jamón" data-base="18" data-uds="6" data-horneado="1"></li>
     </ul>
   </section>
 </div>
 
 <div class="envoltura seccion">
   <h2>Cómo te llega.</h2>
-
   <div class="reparto">
     <div>
       <h3>A domicilio</h3>
-      <p>
-        Repartimos por <b>todo Madrid</b>. El precio del envío depende de la zona
-        y te lo decimos al confirmar el pedido, antes de cobrar nada.
-      </p>
+      <p>Repartimos por <b>todo Madrid</b>. El precio del envío depende de la zona y te lo decimos al confirmar el pedido, antes de cobrar nada.</p>
     </div>
     <div>
       <h3>Recoger en la tienda</h3>
-      <p>
-        <b>Calle Berrocal 7, local 3</b><br>28021 Madrid · Butarque, Villaverde
-      </p>
+      <p><b>Calle Berrocal 7, local 3</b><br>28021 Madrid · Butarque, Villaverde</p>
       <p>Sin coste. Te avisamos cuando esté lista.</p>
     </div>
     <div>
@@ -308,14 +331,13 @@
         <li><span>Lunes a jueves</span><span>10:00–13:00 · 16:00–20:00</span></li>
         <li><span>Viernes</span><span>10:00–13:00 · 15:00–18:00</span></li>
         <li><span>Sábado</span><span>Hasta las 18:00</span></li>
-        <li><span>Domingo</span><span class="cerrado">Cerrado</span></li>
+        <li><span>Domingo</span><span>Cerrado</span></li>
       </ul>
     </div>
   </div>
-
   <p class="nota-fritura" style="margin-top:30px">
     Algunos sabores se hacen por encargo con 48 horas de antelación. Si el tuyo
-    es uno de ellos, te lo decimos al pedir.
+    es uno de ellos, te lo decimos al confirmar.
   </p>
 </div>
 
@@ -323,70 +345,366 @@
   <h2>Pronto, en el mostrador.</h2>
   <p>Dos cosas que ya están en el horno de prueba.</p>
   <div class="pronto">
-    <figure>
-      <img src="__PAN__" alt="Pan de jamón">
-      <figcaption>Pan de Jamón <small>· muy pronto</small></figcaption>
-    </figure>
-    <figure>
-      <img src="__GOL__" alt="Golfeados">
-      <figcaption>Golfeados <small>· muy pronto</small></figcaption>
-    </figure>
+    <figure><img src="__PAN__" alt="Pan de jamón"><figcaption>Pan de Jamón <small>· muy pronto</small></figcaption></figure>
+    <figure><img src="__GOL__" alt="Golfeados"><figcaption>Golfeados <small>· muy pronto</small></figcaption></figure>
   </div>
 </div>
 
 <footer class="pie">
   <div class="envoltura">
     <div class="pie-dentro">
-      <div>
-        <h4>Don Pepe Sabor</h4>
-        <address>Calle Berrocal 7, local 3<br>28021 Madrid</address>
-      </div>
-      <div>
-        <h4>Pedidos</h4>
-        <p class="telefono" style="color:var(--crema)">604 136 371</p>
-        <p>WhatsApp, todos los días que abrimos</p>
-      </div>
-      <div>
-        <h4>Registro sanitario</h4>
-        <p>RGSEAA 26.027183/M</p>
-      </div>
+      <div><h4>Don Pepe Sabor</h4><address>Calle Berrocal 7, local 3<br>28021 Madrid</address></div>
+      <div><h4>Pedidos</h4><p class="telefono" style="color:var(--crema)">604 136 371</p><p>WhatsApp, todos los días que abrimos</p></div>
+      <div><h4>Registro sanitario</h4><p>RGSEAA 26.027183/M</p></div>
     </div>
     <p class="legal">Inversiones Ayala 1992 S.L. · Comida venezolana elaborada en Madrid</p>
   </div>
 </footer>
 
+<div class="barra" id="barra" hidden>
+  <div class="barra-dentro">
+    <p class="barra-cuenta" id="barraCuenta"></p>
+    <button type="button" class="boton-oro" id="verPedido">Ver el pedido</button>
+  </div>
+</div>
+
+<div class="velo" id="velo" hidden></div>
+
+<div class="hoja" id="hoja" hidden role="dialog" aria-modal="true" aria-labelledby="tituloHoja">
+  <div class="hoja-dentro">
+    <div class="hoja-cab">
+      <h2 id="tituloHoja">Tu pedido</h2>
+      <button type="button" class="cerrar" id="cerrarHoja" aria-label="Cerrar">✕</button>
+    </div>
+
+    <div id="lineas"></div>
+
+    <div class="suma" id="suma" hidden><span>Total</span><b id="total">0,00 €</b></div>
+
+    <div class="campos" id="campos" hidden>
+      <div class="campo">
+        <label for="fNombre">Tu nombre</label>
+        <input id="fNombre" autocomplete="name" placeholder="María González">
+      </div>
+      <div class="campo">
+        <label for="fTelefono">Teléfono</label>
+        <input id="fTelefono" inputmode="tel" autocomplete="tel" placeholder="612 345 678">
+      </div>
+
+      <div class="campo">
+        <label>¿Cómo lo recibes?</label>
+        <div class="opciones">
+          <button type="button" class="opcion" id="eDomicilio" aria-pressed="true">A domicilio<small>Te lo llevamos</small></button>
+          <button type="button" class="opcion" id="eRecogida" aria-pressed="false">Recogida<small>Pasas por la tienda</small></button>
+        </div>
+      </div>
+
+      <div class="campo" id="campoDireccion">
+        <label for="fDireccion">Dirección de entrega</label>
+        <input id="fDireccion" autocomplete="street-address" placeholder="Calle y número, piso">
+        <div class="dos" style="margin-top:10px">
+          <input id="fCp" inputmode="numeric" maxlength="5" autocomplete="postal-code" placeholder="Código postal">
+        </div>
+      </div>
+
+      <div class="campo">
+        <label for="fDia">¿Qué día?</label>
+        <input id="fDia" type="date">
+      </div>
+
+      <div class="campo" id="campoTurno">
+        <label>¿Mañana o tarde?</label>
+        <div class="opciones" id="turnos"></div>
+      </div>
+
+      <div class="campo">
+        <label for="fNota">Comentario <small style="font-weight:500">(opcional)</small></label>
+        <textarea id="fNota" placeholder="Timbre 3ºB · es para un cumpleaños…"></textarea>
+      </div>
+    </div>
+
+    <p class="aviso" id="avisoFalta" hidden></p>
+
+    <div class="pie-hoja" id="pieHoja" hidden>
+      <a class="boton-oro" id="enviar" href="#" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 00-8.6 15.1L2 22l5-1.3A10 10 0 1012 2zm0 18.2a8.2 8.2 0 01-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1112 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 01-3.3-2.9c-.3-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 00-.7.3 3 3 0 00-.9 2.2 5.2 5.2 0 001.1 2.7 11.8 11.8 0 004.5 4c1.7.7 2.4.8 3.2.6a2.8 2.8 0 001.8-1.3 2.3 2.3 0 00.2-1.3c-.1-.1-.3-.2-.5-.3z"/></svg>
+        Enviar el pedido por WhatsApp
+      </a>
+      <p class="letra-chica">Se abre WhatsApp con el pedido ya escrito. Lo envías tú.</p>
+    </div>
+  </div>
+</div>
+
 <script>
-  (function () {
-    var botones = { Congelado: document.getElementById('congelado'), Frito: document.getElementById('frito') };
-    var nota = document.getElementById('notaFritura');
-    var precios = Array.prototype.slice.call(document.querySelectorAll('.precio'));
+(function () {
+  'use strict';
 
-    // El recargo real del local: 5 € la bandeja, 6 € la de 50 (lleva más aceite
-    // y más trabajo). Los cachitos van horneados y no tienen recargo.
-    function recargo(uds) { return uds === 50 ? 6 : 5; }
+  var TELEFONO_TIENDA = '34604136371';
+  var LOCAL = 'Calle Berrocal 7, local 3, 28021 Madrid';
+  var GUARDADO = 'dps_muestra_pedido';
 
-    var TEXTO = {
-      Congelado: 'Los precios son de la bandeja congelada, para que la frías tú.',
-      Frito: 'Precios con la fritura incluida: 5 € por bandeja, 6 € la de 50. Los cachitos van horneados y no llevan recargo.'
-    };
+  /* El recargo real del local: 5 € la bandeja, 6 € la de 50, que lleva más
+     aceite y más trabajo. Los cachitos van horneados y no tienen recargo. */
+  function recargo(uds) { return uds === 50 ? 6 : 5; }
+  function eur(n) { return n.toFixed(2).replace('.', ',') + ' €'; }
 
-    function pintar(modo) {
-      precios.forEach(function (el) {
-        var base = parseFloat(el.dataset.base);
-        var uds = parseInt(el.dataset.uds, 10);
-        var total = (modo === 'Frito' && !el.dataset.horneado) ? base + recargo(uds) : base;
-        el.textContent = total + ' €';
+  var modo = 'Congelado';
+  var carrito = [];   // { nombre, uds, base, modo, cantidad }
+  var entrega = 'Domicilio';
+  var turno = '';
+
+  /* ── Catálogo: se lee de la propia carta, que es lo que ve el cliente ──
+     Así no hay dos listas de precios que puedan contradecirse. */
+  var filas = [].slice.call(document.querySelectorAll('.plato'));
+
+  function precioDe(base, uds, horneado, m) {
+    return (m === 'Frito' && !horneado) ? base + recargo(uds) : base;
+  }
+
+  function pintarCarta() {
+    filas.forEach(function (fila) {
+      var base = parseFloat(fila.dataset.base);
+      var uds = parseInt(fila.dataset.uds, 10);
+      var horneado = !!fila.dataset.horneado;
+      var puestas = cuantasHay(fila.dataset.nombre, uds, horneado ? 'Horneado' : modo);
+      fila.classList.toggle('puesto', puestas > 0);
+      fila.innerHTML =
+        '<span class="uds">' + uds + '<small>UDS</small></span>' +
+        '<span class="plato-nombre">' + corto(fila.dataset.nombre) +
+          (fila.dataset.apunte ? '<span>' + fila.dataset.apunte + '</span>' : '') + '</span>' +
+        '<span class="precio">' + eur(precioDe(base, uds, horneado, modo)) + '</span>' +
+        '<button type="button" class="sumar" aria-label="Añadir ' + fila.dataset.nombre + '">' +
+          (puestas > 0 ? puestas + '✓' : '+') + '</button>';
+      fila.querySelector('.sumar').addEventListener('click', function () {
+        añadir(fila.dataset.nombre, uds, base, horneado);
       });
-      Object.keys(botones).forEach(function (k) {
-        botones[k].setAttribute('aria-pressed', String(k === modo));
-      });
-      nota.textContent = TEXTO[modo];
-    }
-
-    Object.keys(botones).forEach(function (k) {
-      botones[k].addEventListener('click', function () { pintar(k); });
     });
+  }
 
-    pintar('Congelado');
-  })();
+  /* En la carta ya manda el título de la familia: repetirlo en cada línea
+     sobra. En el pedido y en el mensaje sí va el nombre entero. */
+  function corto(nombre) {
+    return nombre
+      .replace(/^Tequeños de /, '').replace(/^Tequeños /, '')
+      .replace(/^Pastelitos de /, '').replace(/^Empanadas de /, '')
+      .replace(/^Cachitos de /, '')
+      .replace(/^./, function (c) { return c.toUpperCase(); });
+  }
+
+  function cuantasHay(nombre, uds, m) {
+    var l = carrito.find(function (x) { return x.nombre === nombre && x.uds === uds && x.modo === m; });
+    return l ? l.cantidad : 0;
+  }
+
+  function añadir(nombre, uds, base, horneado) {
+    var m = horneado ? 'Horneado' : modo;
+    var l = carrito.find(function (x) { return x.nombre === nombre && x.uds === uds && x.modo === m; });
+    if (l) l.cantidad++;
+    else carrito.push({ nombre: nombre, uds: uds, base: base, modo: m, cantidad: 1, horneado: horneado });
+    cambió();
+  }
+
+  function mover(i, delta) {
+    carrito[i].cantidad += delta;
+    if (carrito[i].cantidad <= 0) carrito.splice(i, 1);
+    cambió();
+  }
+
+  function precioLinea(l) { return precioDe(l.base, l.uds, l.horneado, l.modo) * l.cantidad; }
+  function total() { return carrito.reduce(function (s, l) { return s + precioLinea(l); }, 0); }
+  function bandejas() { return carrito.reduce(function (s, l) { return s + l.cantidad; }, 0); }
+
+  /* ── Turnos: los mismos que da la tienda, y cambian según el día ────────
+     Domingo no se reparte; el viernes la tarde se acorta; el sábado hay un
+     turno solo. */
+  function turnosDe(iso) {
+    if (!iso) return [];
+    var d = new Date(iso + 'T12:00:00').getDay();
+    if (d === 0) return [];
+    if (d === 6) return [{ id: 'sabado', nombre: 'Todo el día', hora: '10:00–18:00' }];
+    if (d === 5) return [{ id: 'manana', nombre: 'Mañana', hora: '10:00–13:00' },
+                         { id: 'tarde',  nombre: 'Tarde',  hora: '15:00–18:00' }];
+    return [{ id: 'manana', nombre: 'Mañana', hora: '10:00–13:00' },
+            { id: 'tarde',  nombre: 'Tarde',  hora: '16:00–20:00' }];
+  }
+
+  function pintarTurnos() {
+    var caja = document.getElementById('turnos');
+    var lista = turnosDe(document.getElementById('fDia').value);
+    if (!lista.some(function (t) { return t.id === turno; })) turno = '';
+    if (!lista.length) {
+      caja.innerHTML = '<p class="letra-chica" style="grid-column:1/-1;text-align:left">' +
+        'Los domingos no repartimos. Elige otro día.</p>';
+      return;
+    }
+    caja.innerHTML = lista.map(function (t) {
+      return '<button type="button" class="opcion" data-turno="' + t.id + '" aria-pressed="' +
+        (turno === t.id) + '">' + t.nombre + '<small>' + t.hora + '</small></button>';
+    }).join('');
+    [].forEach.call(caja.querySelectorAll('[data-turno]'), function (b) {
+      b.addEventListener('click', function () { turno = b.dataset.turno; pintarTurnos(); revisar(); });
+    });
+  }
+
+  function fechaLegible(iso) {
+    if (!iso) return '';
+    var f = new Date(iso + 'T12:00:00');
+    return f.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+  }
+
+  /* ── Qué falta para poder enviar ─────────────────────────────────────── */
+  function queFalta() {
+    if (!carrito.length) return 'Añade alguna bandeja';
+    if (!document.getElementById('fNombre').value.trim()) return 'Escribe tu nombre';
+    if (document.getElementById('fTelefono').value.replace(/\D/g, '').length < 9) return 'Escribe tu teléfono';
+    if (entrega === 'Domicilio') {
+      if (!document.getElementById('fDireccion').value.trim()) return 'Escribe la dirección de entrega';
+      if (!/^\d{5}$/.test(document.getElementById('fCp').value.trim())) return 'Falta el código postal';
+    }
+    var dia = document.getElementById('fDia').value;
+    if (!dia) return 'Elige el día';
+    if (!turnosDe(dia).length) return 'Los domingos no repartimos: elige otro día';
+    if (!turno) return 'Elige mañana o tarde';
+    return '';
+  }
+
+  /* ── El mensaje, con el mismo formato que ya recibe la tienda ────────── */
+  function mensaje() {
+    var L = ['¡Hola! Quiero hacer un pedido 🧀', ''];
+    L.push('*Nombre:* ' + document.getElementById('fNombre').value.trim());
+    L.push('*Teléfono:* ' + document.getElementById('fTelefono').value.trim());
+    if (entrega === 'Domicilio') {
+      L.push('*Entrega:* 🚚 A domicilio — ' + document.getElementById('fDireccion').value.trim() +
+             ', ' + document.getElementById('fCp').value.trim());
+    } else {
+      L.push('*Entrega:* 🏪 Recogida en ' + LOCAL);
+    }
+    var t = turnosDe(document.getElementById('fDia').value).find(function (x) { return x.id === turno; });
+    L.push('*Día:* ' + fechaLegible(document.getElementById('fDia').value) + ' · ' + t.nombre + ' (' + t.hora + ')');
+    L.push('', '*Productos:*');
+    carrito.forEach(function (l) {
+      L.push('· ' + l.cantidad + 'x ' + l.nombre + ' — bandeja de ' + l.uds +
+             ', ' + l.modo.toLowerCase() + ' — ' + eur(precioLinea(l)));
+    });
+    L.push('', '*TOTAL: ' + eur(total()) + '*');
+    if (entrega === 'Domicilio') L.push('(Falta el envío, que me confirmáis según la zona)');
+    var nota = document.getElementById('fNota').value.trim();
+    if (nota) L.push('', '*Nota:* ' + nota);
+    return L.join('\n');
+  }
+
+  /* ── Pintar ──────────────────────────────────────────────────────────── */
+  function pintarPedido() {
+    var caja = document.getElementById('lineas');
+    if (!carrito.length) {
+      caja.innerHTML = '<p class="vacio">Todavía no has añadido nada.<br>Pulsa el + de cualquier bandeja.</p>';
+    } else {
+      caja.innerHTML = carrito.map(function (l, i) {
+        return '<div class="linea">' +
+          '<span class="linea-nombre">' + l.nombre + '<span>Bandeja de ' + l.uds + ' · ' + l.modo + '</span></span>' +
+          '<span class="contador"><button type="button" data-i="' + i + '" data-d="-1" aria-label="Quitar una">−</button>' +
+          '<b>' + l.cantidad + '</b>' +
+          '<button type="button" data-i="' + i + '" data-d="1" aria-label="Añadir una">+</button></span>' +
+          '<span class="linea-precio">' + eur(precioLinea(l)) + '</span></div>';
+      }).join('');
+      [].forEach.call(caja.querySelectorAll('[data-d]'), function (b) {
+        b.addEventListener('click', function () { mover(+b.dataset.i, +b.dataset.d); });
+      });
+    }
+    document.getElementById('total').textContent = eur(total());
+    document.getElementById('suma').hidden = !carrito.length;
+    document.getElementById('campos').hidden = !carrito.length;
+    document.getElementById('pieHoja').hidden = !carrito.length;
+  }
+
+  function revisar() {
+    var falta = queFalta();
+    var av = document.getElementById('avisoFalta');
+    av.textContent = falta;
+    av.hidden = !falta || !carrito.length;
+    var boton = document.getElementById('enviar');
+    if (falta) {
+      boton.setAttribute('aria-disabled', 'true');
+      boton.setAttribute('disabled', '');
+      boton.removeAttribute('href');
+    } else {
+      boton.removeAttribute('aria-disabled');
+      boton.removeAttribute('disabled');
+      boton.href = 'https://wa.me/' + TELEFONO_TIENDA + '?text=' + encodeURIComponent(mensaje());
+    }
+  }
+
+  function cambió() {
+    pintarCarta();
+    pintarPedido();
+    revisar();
+    var barra = document.getElementById('barra');
+    barra.hidden = !carrito.length;
+    document.getElementById('barraCuenta').innerHTML =
+      bandejas() + (bandejas() === 1 ? ' bandeja' : ' bandejas') + '<b>' + eur(total()) + '</b>';
+    document.body.style.paddingBottom = carrito.length ? '96px' : '';
+    try { localStorage.setItem(GUARDADO, JSON.stringify(carrito)); } catch (e) { /* en privado no se puede */ }
+  }
+
+  /* ── Abrir y cerrar la hoja ──────────────────────────────────────────── */
+  function abrir() {
+    document.getElementById('velo').hidden = false;
+    document.getElementById('hoja').hidden = false;
+    document.getElementById('fNombre').focus();
+  }
+  function cerrar() {
+    document.getElementById('velo').hidden = true;
+    document.getElementById('hoja').hidden = true;
+  }
+  document.getElementById('verPedido').addEventListener('click', abrir);
+  document.getElementById('cerrarHoja').addEventListener('click', cerrar);
+  document.getElementById('velo').addEventListener('click', cerrar);
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') cerrar(); });
+
+  /* ── Congelado / frito ───────────────────────────────────────────────── */
+  var TEXTO = {
+    Congelado: 'Los precios son de la bandeja congelada, para que la frías tú. Lo que añadas al pedido se guarda así; puedes cambiar de opción y seguir sumando.',
+    Frito: 'Precios con la fritura incluida: 5 € por bandeja, 6 € la de 50. Los cachitos van horneados y no llevan recargo.'
+  };
+  ['Congelado', 'Frito'].forEach(function (m) {
+    document.getElementById(m.toLowerCase()).addEventListener('click', function () {
+      modo = m;
+      document.getElementById('congelado').setAttribute('aria-pressed', String(m === 'Congelado'));
+      document.getElementById('frito').setAttribute('aria-pressed', String(m === 'Frito'));
+      document.getElementById('notaFritura').textContent = TEXTO[m];
+      pintarCarta();
+    });
+  });
+
+  /* ── Entrega ─────────────────────────────────────────────────────────── */
+  ['Domicilio', 'Recogida'].forEach(function (e) {
+    document.getElementById('e' + e).addEventListener('click', function () {
+      entrega = e;
+      document.getElementById('eDomicilio').setAttribute('aria-pressed', String(e === 'Domicilio'));
+      document.getElementById('eRecogida').setAttribute('aria-pressed', String(e === 'Recogida'));
+      document.getElementById('campoDireccion').hidden = (e !== 'Domicilio');
+      revisar();
+    });
+  });
+
+  ['fNombre', 'fTelefono', 'fDireccion', 'fCp', 'fNota'].forEach(function (id) {
+    document.getElementById(id).addEventListener('input', revisar);
+  });
+  document.getElementById('fDia').addEventListener('change', function () { pintarTurnos(); revisar(); });
+
+  /* ── Arranque ────────────────────────────────────────────────────────── */
+  var hoy = new Date();
+  var iso = new Date(hoy.getTime() - hoy.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  var dia = document.getElementById('fDia');
+  dia.min = iso;
+  dia.value = iso;
+
+  try {
+    var g = JSON.parse(localStorage.getItem(GUARDADO) || '[]');
+    if (Array.isArray(g)) carrito = g;
+  } catch (e) { /* nada guardado */ }
+
+  pintarTurnos();
+  cambió();
+})();
 </script>
