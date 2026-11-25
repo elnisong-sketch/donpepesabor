@@ -19,7 +19,7 @@ export default function Mantenimiento({ mensaje }) {
   return (
     <div className="dps">
       <div className="mant">
-        <img className="mant-logo" src="/logo-donpepe.png" alt="Don Pepe Sabor" />
+        <img className="mant-logo" src="/logo-donpepe-cartel.png" alt="Don Pepe Sabor" />
         <p className="mant-marca">Don Pepe <span>Sabor</span></p>
         <h1 className="mant-titulo">Volvemos enseguida</h1>
         <p className="mant-texto">{mensaje?.trim() || MENSAJE_POR_DEFECTO}</p>

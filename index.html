@@ -19,7 +19,13 @@
       fijo, al repartidor le abriría la pantalla de contraseña de la gestión.
     -->
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <!--
+      El `?2` no es un adorno: el archivo se llama igual que antes pero la
+      imagen es otra, y un iPhone que ya tuviera guardada la anterior seguiría
+      enseñándola. Cambiando la dirección se la vuelve a pedir. El nombre del
+      archivo NO se cambia porque Safari lo busca ahí aunque no se lo digas.
+    -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png?2" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Don Pepe" />

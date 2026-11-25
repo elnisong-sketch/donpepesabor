@@ -43,7 +43,7 @@ const ESTADO_COLORS = {
 function Marca({ pie }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 11, minWidth: 0 }}>
-      <img src="/logo-donpepe.png" alt="" style={{ width: 40, height: 40, objectFit: "contain", borderRadius: 10, background: BG_APP, flex: "none" }} />
+      <img src="/logo-donpepe-cartel.png" alt="" style={{ width: 40, height: 40, objectFit: "contain", borderRadius: 10, background: BG_APP, flex: "none" }} />
       <span style={{ minWidth: 0 }}>
         <span style={{ display: "block", fontFamily: TIPO_TIT, fontWeight: 800, fontSize: 16, color: "#fff" }}>
           Don Pepe <span style={{ color: ORO }}>Sabor</span>
@@ -417,7 +417,7 @@ export default function AppRepartidor() {
   if (cargando) {
     return (
       <div style={{ minHeight: "100vh", background: BG_APP, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: TIPO }}>
-        <img src="/logo-donpepe.png" alt="" style={{ width: 84, height: 84, objectFit: "contain", marginBottom: 14 }} />
+        <img src="/logo-donpepe-cartel.png" alt="" style={{ width: 84, height: 84, objectFit: "contain", marginBottom: 14 }} />
         <p style={{ fontFamily: TIPO_TIT, color: MARRON, fontSize: 21, fontWeight: 800, margin: 0 }}>
           Don Pepe <span style={{ color: VINO }}>Sabor</span>
         </p>

@@ -8,9 +8,19 @@
       "rewrites": [{ "source": "**", "destination": "/index.html" }],
       "headers": [
         {
-          "comment": "Los ficheros con hash en el nombre no cambian nunca: se cachean para siempre.",
-          "source": "**/*.@(js|css|png|jpg|jpeg|webp|svg|ico|woff|woff2)",
+          "comment": "Lo que sale de compilar lleva un código en el nombre (index-CnxTeJhm.js): si cambia por dentro, cambia el nombre. Esos sí se guardan para siempre, porque el archivo de ese nombre nunca va a ser otro.",
+          "source": "/assets/**",
           "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+        },
+        {
+          "comment": "El logo, los iconos y las fotos se llaman SIEMPRE IGUAL aunque la imagen cambie. Antes caían en la regla de arriba, que con 'immutable' le dice al navegador 'no vuelvas a pedir esto en un año': se cambió el logo por el del cartel del local y los clientes siguieron viendo el viejo, sin forma de enterarse. Una hora es el equilibrio: al volver a la tienda carga igual de rápido, y un cambio se ve el mismo día.",
+          "source": "/*.@(png|jpg|jpeg|webp|svg|ico)",
+          "headers": [{ "key": "Cache-Control", "value": "public, max-age=3600" }]
+        },
+        {
+          "comment": "Las fotos de los productos, por lo mismo: el día que se cambie la foto de un tequeño, se ve.",
+          "source": "/productos/**",
+          "headers": [{ "key": "Cache-Control", "value": "public, max-age=3600" }]
         },
         {
           "comment": "El HTML cambia en cada publicación; sin esto el cliente vería la tienda de ayer.",
@@ -31,8 +41,17 @@
       "rewrites": [{ "source": "**", "destination": "/index.html" }],
       "headers": [
         {
-          "source": "**/*.@(js|css|png|jpg|jpeg|webp|svg|ico|woff|woff2)",
+          "comment": "Lo mismo que en la tienda, y por lo mismo: ver los comentarios de arriba.",
+          "source": "/assets/**",
           "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+        },
+        {
+          "source": "/*.@(png|jpg|jpeg|webp|svg|ico)",
+          "headers": [{ "key": "Cache-Control", "value": "public, max-age=3600" }]
+        },
+        {
+          "source": "/productos/**",
+          "headers": [{ "key": "Cache-Control", "value": "public, max-age=3600" }]
         },
         {
           "source": "/",

@@ -73,7 +73,7 @@ function Login({ subtitulo }) {
   return (
     <div style={{ minHeight: "100vh", background: CREMA, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: "'Manrope', system-ui, sans-serif", color: TINTA, padding: 24 }}>
       <div style={{ background: "#fff", border: `1px solid ${CREMA2}`, borderRadius: 20, padding: "34px 30px", maxWidth: 360, width: "100%", boxShadow: "0 18px 50px rgba(42,18,0,.12)", textAlign: "center" }}>
-        <img src="/logo-donpepe.png" alt="" style={{ width: 86, height: 86, objectFit: "contain", margin: "0 auto 14px", display: "block" }} />
+        <img src="/logo-donpepe-cartel.png" alt="" style={{ width: 86, height: 86, objectFit: "contain", margin: "0 auto 14px", display: "block" }} />
         <h1 style={{ fontFamily: "'Archivo', system-ui, sans-serif", color: MARRON, fontSize: 23, fontWeight: 800, margin: "0 0 3px" }}>
           Don Pepe <span style={{ color: VINO }}>Sabor</span>
         </h1>

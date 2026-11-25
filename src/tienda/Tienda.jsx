@@ -87,7 +87,7 @@ export default function Tienda() {
       <header className="head">
         <div className="col">
           <a href="#inicio" className="logo">
-            <img className="logo-mark" src="/logo-donpepe.png" alt="Don Pepe" />
+            <img className="logo-mark" src="/logo-donpepe-cartel.png" alt="Don Pepe" />
             <div className="logo-stack">
               <span className="logo-word">Don Pepe <em>Sabor</em></span>
               <span className="logo-tag">Tequeños · Pasteles · Empanadas</span>
@@ -185,7 +185,7 @@ export default function Tienda() {
       <footer className="foot">
         <div className="col">
           <a href="#inicio" className="logo">
-            <img className="logo-mark" src="/logo-donpepe.png" alt="Don Pepe" />
+            <img className="logo-mark" src="/logo-donpepe-cartel.png" alt="Don Pepe" />
           </a>
           <nav>
             <a href="https://instagram.com/donpepesabor" target="_blank" rel="noreferrer">Instagram</a>

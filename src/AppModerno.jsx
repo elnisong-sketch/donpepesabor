@@ -3906,7 +3906,7 @@ function MembreteEmpresa({ emp }) {
     <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
       {/* Pequeño a propósito: en una hoja A4 cada píxel de alto aquí es menos
           sitio para los productos antes de saltar a la segunda página. */}
-      <img src="/logo-donpepe.png" alt="" style={{ width: 46, height: 46, objectFit: "contain", flex: "none" }} />
+      <img src="/logo-donpepe-cartel.png" alt="" style={{ width: 46, height: 46, objectFit: "contain", flex: "none" }} />
       <div>
         <div style={{ fontWeight: 700, fontSize: 18 }}>{emp.nombre}</div>
         {/* Quien factura va debajo del nombre comercial: el papel lo pide,
@@ -4577,7 +4577,7 @@ export default function AppModerno() {
             </button>
           )}
           <button onClick={irInicio} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 11, flex: 1, minWidth: 0, textAlign: "left" }}>
-            <img src="/logo-donpepe.png" alt="" style={{ width: 42, height: 42, objectFit: "contain", borderRadius: 10, background: BG_APP, flex: "none" }} />
+            <img src="/logo-donpepe-cartel.png" alt="" style={{ width: 42, height: 42, objectFit: "contain", borderRadius: 10, background: BG_APP, flex: "none" }} />
             <span style={{ minWidth: 0 }}>
               <span style={{ display: "block", fontFamily: TIPO_TIT, fontWeight: 800, fontSize: 16, color: "#fff" }}>
                 Don Pepe <span style={{ color: ORO }}>Sabor</span>
@@ -4626,7 +4626,7 @@ export default function AppModerno() {
         {menuFijo ? (
           <button onClick={irInicio}
             style={{ background: MARRON, border: "none", cursor: "pointer", padding: "15px 18px", display: "flex", alignItems: "center", gap: 11, textAlign: "left" }}>
-            <img src="/logo-donpepe.png" alt="" style={{ width: 40, height: 40, objectFit: "contain", borderRadius: 10, background: BG_APP, flex: "none" }} />
+            <img src="/logo-donpepe-cartel.png" alt="" style={{ width: 40, height: 40, objectFit: "contain", borderRadius: 10, background: BG_APP, flex: "none" }} />
             <span style={{ minWidth: 0 }}>
               <span style={{ display: "block", fontFamily: TIPO_TIT, fontWeight: 800, fontSize: 15, color: "#fff" }}>
                 Don Pepe <span style={{ color: ORO }}>Sabor</span>
