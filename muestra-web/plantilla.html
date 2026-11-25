@@ -1,0 +1,388 @@
+<meta charset="utf-8">
+<title>Don Pepe Sabor</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800;900&family=Manrope:wght@400;500;700&display=swap">
+
+<style>
+  /* Una sola columna sobre fondo tostado, como el cartel del local. La unidad
+     de medida del negocio —la bandeja— es también la del diseño: el número de
+     unidades manda en cada fila y es lo único que se sale de la retícula. */
+  :root {
+    --tostado: #190b01;
+    --marron:  #2a1200;
+    --brasa:   #3d1d07;
+    --crema:   #fbf4e8;
+    --arena:   #bfa78f;
+    --oro:     #e8a317;
+
+    --display: 'Archivo', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    --texto:   'Manrope', 'Segoe UI', system-ui, sans-serif;
+
+    color-scheme: dark;
+    background: var(--tostado);
+  }
+
+  body {
+    background: var(--tostado);
+    color: var(--crema);
+    font-family: var(--texto);
+    font-size: 17px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .envoltura {
+    max-width: 1020px;
+    margin-inline: auto;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+
+  h1, h2, h3 { font-family: var(--display); font-weight: 900; line-height: 1.02; margin: 0; text-wrap: balance; }
+  p { margin: 0; }
+  ul { list-style: none; margin: 0; padding: 0; }
+
+  a { color: var(--oro); }
+  :focus-visible { outline: 2px solid var(--oro); outline-offset: 3px; border-radius: 2px; }
+
+  /* ── Arranque ─────────────────────────────────────────────────────────── */
+  .arranque { padding-block: 34px 10px; }
+
+  .marca { display: flex; align-items: center; gap: 13px; }
+  .marca img { width: 54px; height: 54px; flex: none; }
+  .marca b { font-family: var(--display); font-weight: 800; font-size: 19px; letter-spacing: -.01em; }
+  .marca span { display: block; font-size: 11.5px; color: var(--arena); letter-spacing: .14em; font-weight: 700; }
+
+  .titular {
+    font-size: clamp(2.6rem, 9vw, 5.2rem);
+    letter-spacing: -.035em;
+    margin-top: 42px;
+    max-width: 14ch;
+  }
+  .titular em { font-style: normal; color: var(--oro); }
+
+  .entradilla { margin-top: 22px; max-width: 46ch; color: var(--arena); font-size: 1.07rem; }
+
+  .acciones { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 22px; margin-top: 30px; }
+
+  .wasap {
+    display: inline-flex; align-items: center; gap: 9px;
+    background: var(--oro); color: #241001;
+    font-family: var(--display); font-weight: 800; font-size: 15px;
+    padding: 14px 22px; border-radius: 999px; text-decoration: none;
+  }
+  .wasap svg { width: 19px; height: 19px; fill: currentColor; }
+  .telefono { font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: .01em; }
+  .telefono small { display: block; font-weight: 500; font-size: 12.5px; color: var(--arena); letter-spacing: 0; }
+
+  .foto-arranque {
+    margin-top: 44px; border-radius: 18px; overflow: hidden;
+    aspect-ratio: 16 / 9; max-width: 100%; background: var(--marron);
+  }
+  .foto-arranque img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+  /* ── Secciones ────────────────────────────────────────────────────────── */
+  .seccion { padding-block: 64px; }
+  .seccion > h2 { font-size: clamp(1.75rem, 4.4vw, 2.5rem); letter-spacing: -.03em; }
+  .seccion > h2 + p { margin-top: 14px; max-width: 52ch; color: var(--arena); }
+
+  /* ── El interruptor congelado / frito ─────────────────────────────────── */
+  .como {
+    display: inline-flex; gap: 4px; margin-top: 26px; padding: 4px;
+    background: var(--marron); border-radius: 999px; border: 1px solid var(--brasa);
+  }
+  .como button {
+    border: none; background: none; color: var(--arena); cursor: pointer;
+    font-family: var(--texto); font-size: 14.5px; font-weight: 700;
+    padding: 10px 18px; border-radius: 999px; line-height: 1.25; text-align: left;
+  }
+  .como button small { display: block; font-weight: 500; font-size: 12px; opacity: .8; }
+  .como button[aria-pressed="true"] { background: var(--oro); color: #241001; }
+  @media (prefers-reduced-motion: no-preference) {
+    .como button { transition: background .18s ease, color .18s ease; }
+  }
+
+  .nota-fritura { margin-top: 16px; font-size: 14.5px; color: var(--arena); max-width: 54ch; }
+
+  /* ── La carta ─────────────────────────────────────────────────────────── */
+  .familia { margin-top: 54px; }
+  .familia-cab { display: flex; align-items: center; gap: 16px; }
+  .familia-cab img { width: 62px; height: 62px; border-radius: 12px; object-fit: cover; flex: none; }
+  .familia-cab h3 { font-size: 1.45rem; letter-spacing: -.02em; }
+  .familia-cab p { font-size: 13.5px; color: var(--arena); margin-top: 3px; }
+
+  .platos { margin-top: 20px; }
+  .plato {
+    display: grid; grid-template-columns: 58px 1fr auto;
+    align-items: baseline; gap: 0 16px;
+    padding: 13px 0; border-top: 1px solid var(--brasa);
+  }
+  .uds {
+    font-family: var(--display); font-weight: 900; font-size: 1.5rem;
+    color: var(--oro); font-variant-numeric: tabular-nums; line-height: 1;
+  }
+  .uds small { display: block; font-family: var(--texto); font-size: 10.5px; font-weight: 700; color: var(--arena); letter-spacing: .1em; margin-top: 3px; }
+  .plato-nombre { min-width: 0; font-weight: 500; }
+  .plato-nombre b { display: block; font-weight: 700; }
+  .plato-nombre span { font-size: 13px; color: var(--arena); }
+  .precio {
+    font-family: var(--display); font-weight: 800; font-size: 1.22rem;
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+
+  /* ── Cómo llega ───────────────────────────────────────────────────────── */
+  .reparto { display: grid; grid-template-columns: repeat(auto-fit, minmax(255px, 1fr)); gap: 30px; margin-top: 34px; }
+  .reparto h3 { font-size: 1.12rem; letter-spacing: -.01em; }
+  .reparto p { margin-top: 9px; color: var(--arena); font-size: 15px; }
+  .reparto b { color: var(--crema); }
+
+  .horario { margin-top: 14px; font-size: 15px; }
+  .horario li { display: flex; justify-content: space-between; gap: 18px; padding: 7px 0; border-top: 1px solid var(--brasa); }
+  .horario span:first-child { color: var(--arena); }
+  .horario span:last-child { font-variant-numeric: tabular-nums; text-align: right; }
+  .horario .cerrado { color: var(--arena); }
+
+  /* ── Próximamente ─────────────────────────────────────────────────────── */
+  .pronto { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 22px; margin-top: 30px; }
+  .pronto figure { margin: 0; }
+  .pronto img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 14px; display: block; opacity: .72; }
+  .pronto figcaption { margin-top: 11px; font-family: var(--display); font-weight: 800; font-size: 1.05rem; }
+  .pronto small { color: var(--arena); font-size: 13px; font-weight: 500; font-family: var(--texto); }
+
+  /* ── Pie ──────────────────────────────────────────────────────────────── */
+  .pie { background: var(--marron); margin-top: 40px; padding-block: 40px 46px; }
+  .pie-dentro { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 26px; }
+  .pie h4 { font-family: var(--display); font-weight: 800; font-size: 13px; margin: 0 0 8px; letter-spacing: .02em; }
+  .pie p, .pie address { font-style: normal; color: var(--arena); font-size: 14.5px; }
+  .pie .legal { margin-top: 30px; font-size: 12.5px; color: #8c745c; }
+
+  @media (max-width: 560px) {
+    .plato { grid-template-columns: 50px 1fr auto; gap: 0 12px; }
+    .como { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+  }
+</style>
+
+<div class="envoltura arranque">
+  <div class="marca">
+    <img src="__LOGO__" alt="">
+    <div>
+      <b>Don Pepe Sabor</b>
+      <span>UN SABOR INOLVIDABLE</span>
+    </div>
+  </div>
+
+  <h1 class="titular">El queso tiene que hacer <em>hilo</em>.</h1>
+
+  <p class="entradilla">
+    Tequeños, pastelitos y empanadas venezolanas. Los hacemos en Villaverde,
+    en Calle Berrocal, y los llevamos a cualquier punto de Madrid.
+  </p>
+
+  <div class="acciones">
+    <a class="wasap" href="https://wa.me/34604136371">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 00-8.6 15.1L2 22l5-1.3A10 10 0 1012 2zm0 18.2a8.2 8.2 0 01-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1112 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 01-3.3-2.9c-.3-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 00-.7.3 3 3 0 00-.9 2.2 5.2 5.2 0 001.1 2.7 11.8 11.8 0 004.5 4c1.7.7 2.4.8 3.2.6a2.8 2.8 0 001.8-1.3 2.3 2.3 0 00.2-1.3c-.1-.1-.3-.2-.5-.3z"/></svg>
+      Pedir por WhatsApp
+    </a>
+    <p class="telefono">604 136 371<small>Escríbenos y te confirmamos el día</small></p>
+  </div>
+
+  <div class="foto-arranque"><img src="__HERO__" alt="Tequeños recién hechos, abiertos, con el queso estirándose"></div>
+</div>
+
+<div class="envoltura seccion">
+  <h2>Todo va por bandejas.</h2>
+  <p>
+    Aquí no se vende la unidad: se vende la bandeja, que es lo que hace falta
+    cuando hay gente en casa. Tú eliges cómo te la llevas.
+  </p>
+
+  <div class="como" role="group" aria-label="Cómo quieres la bandeja">
+    <button type="button" id="congelado" aria-pressed="true">
+      Congelado<small>Para freír en casa</small>
+    </button>
+    <button type="button" id="frito" aria-pressed="false">
+      Frito<small>Listo para comer</small>
+    </button>
+  </div>
+
+  <p class="nota-fritura" id="notaFritura">
+    Los precios son de la bandeja congelada, para que la frías tú.
+  </p>
+
+  <section class="familia">
+    <div class="familia-cab">
+      <img src="__TEQ__" alt="">
+      <div>
+        <h3>Tequeños</h3>
+        <p>Masa fina y queso que estira. El clásico de la casa.</p>
+      </div>
+    </div>
+    <ul class="platos">
+      <li class="plato"><span class="uds">25<small>UDS</small></span><span class="plato-nombre"><b>Tradicionales</b></span><span class="precio" data-base="12" data-uds="25">12 €</span></li>
+      <li class="plato"><span class="uds">50<small>UDS</small></span><span class="plato-nombre"><b>Tradicionales</b><span>La bandeja grande, para fiesta</span></span><span class="precio" data-base="24" data-uds="50">24 €</span></li>
+      <li class="plato"><span class="uds">25<small>UDS</small></span><span class="plato-nombre"><b>Tradicionales con orégano y aceite de oliva</b></span><span class="precio" data-base="22" data-uds="25">22 €</span></li>
+      <li class="plato"><span class="uds">25<small>UDS</small></span><span class="plato-nombre"><b>Jamón y queso</b></span><span class="precio" data-base="22" data-uds="25">22 €</span></li>
+      <li class="plato"><span class="uds">25<small>UDS</small></span><span class="plato-nombre"><b>Guayaba y queso</b></span><span class="precio" data-base="22" data-uds="25">22 €</span></li>
+      <li class="plato"><span class="uds">25<small>UDS</small></span><span class="plato-nombre"><b>Chocolate</b></span><span class="precio" data-base="22" data-uds="25">22 €</span></li>
+      <li class="plato"><span class="uds">25<small>UDS</small></span><span class="plato-nombre"><b>Plátano con queso</b></span><span class="precio" data-base="20" data-uds="25">20 €</span></li>
+      <li class="plato"><span class="uds">25<small>UDS</small></span><span class="plato-nombre"><b>Salchicha</b></span><span class="precio" data-base="20" data-uds="25">20 €</span></li>
+    </ul>
+  </section>
+
+  <section class="familia">
+    <div class="familia-cab">
+      <img src="__PAS__" alt="">
+      <div>
+        <h3>Pastelitos</h3>
+        <p>Treinta por bandeja, todos al mismo precio.</p>
+      </div>
+    </div>
+    <ul class="platos">
+      <li class="plato"><span class="uds">30<small>UDS</small></span><span class="plato-nombre"><b>Pollo</b></span><span class="precio" data-base="22" data-uds="30">22 €</span></li>
+      <li class="plato"><span class="uds">30<small>UDS</small></span><span class="plato-nombre"><b>Pollo con queso amarillo</b></span><span class="precio" data-base="22" data-uds="30">22 €</span></li>
+      <li class="plato"><span class="uds">30<small>UDS</small></span><span class="plato-nombre"><b>Carne molida</b></span><span class="precio" data-base="22" data-uds="30">22 €</span></li>
+      <li class="plato"><span class="uds">30<small>UDS</small></span><span class="plato-nombre"><b>Carne mechada</b></span><span class="precio" data-base="22" data-uds="30">22 €</span></li>
+      <li class="plato"><span class="uds">30<small>UDS</small></span><span class="plato-nombre"><b>Carne mechada con queso amarillo</b></span><span class="precio" data-base="22" data-uds="30">22 €</span></li>
+      <li class="plato"><span class="uds">30<small>UDS</small></span><span class="plato-nombre"><b>Jamón y queso</b></span><span class="precio" data-base="22" data-uds="30">22 €</span></li>
+    </ul>
+  </section>
+
+  <section class="familia">
+    <div class="familia-cab">
+      <img src="__EMP__" alt="">
+      <div>
+        <h3>Empanadas</h3>
+        <p>De maíz, cerradas a mano, veinticinco por bandeja.</p>
+      </div>
+    </div>
+    <ul class="platos">
+      <li class="plato"><span class="uds">25<small>UDS</small></span><span class="plato-nombre"><b>Carne molida</b></span><span class="precio" data-base="21" data-uds="25">21 €</span></li>
+      <li class="plato"><span class="uds">25<small>UDS</small></span><span class="plato-nombre"><b>Carne mechada</b></span><span class="precio" data-base="21" data-uds="25">21 €</span></li>
+      <li class="plato"><span class="uds">25<small>UDS</small></span><span class="plato-nombre"><b>Pollo</b></span><span class="precio" data-base="21" data-uds="25">21 €</span></li>
+      <li class="plato"><span class="uds">25<small>UDS</small></span><span class="plato-nombre"><b>Jamón y queso</b></span><span class="precio" data-base="21" data-uds="25">21 €</span></li>
+      <li class="plato"><span class="uds">25<small>UDS</small></span><span class="plato-nombre"><b>Queso</b></span><span class="precio" data-base="21" data-uds="25">21 €</span></li>
+    </ul>
+  </section>
+
+  <section class="familia">
+    <div class="familia-cab">
+      <img src="__CAC__" alt="">
+      <div>
+        <h3>Cachitos</h3>
+        <p>Horneados, no fritos. Salen del horno tal cual te los llevas.</p>
+      </div>
+    </div>
+    <ul class="platos">
+      <li class="plato"><span class="uds">6<small>UDS</small></span><span class="plato-nombre"><b>Cachitos de jamón</b></span><span class="precio" data-base="18" data-uds="6" data-horneado="1">18 €</span></li>
+    </ul>
+  </section>
+</div>
+
+<div class="envoltura seccion">
+  <h2>Cómo te llega.</h2>
+
+  <div class="reparto">
+    <div>
+      <h3>A domicilio</h3>
+      <p>
+        Repartimos por <b>todo Madrid</b>. El precio del envío depende de la zona
+        y te lo decimos al confirmar el pedido, antes de cobrar nada.
+      </p>
+    </div>
+    <div>
+      <h3>Recoger en la tienda</h3>
+      <p>
+        <b>Calle Berrocal 7, local 3</b><br>28021 Madrid · Butarque, Villaverde
+      </p>
+      <p>Sin coste. Te avisamos cuando esté lista.</p>
+    </div>
+    <div>
+      <h3>Horario de reparto y recogida</h3>
+      <ul class="horario">
+        <li><span>Lunes a jueves</span><span>10:00–13:00 · 16:00–20:00</span></li>
+        <li><span>Viernes</span><span>10:00–13:00 · 15:00–18:00</span></li>
+        <li><span>Sábado</span><span>Hasta las 18:00</span></li>
+        <li><span>Domingo</span><span class="cerrado">Cerrado</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <p class="nota-fritura" style="margin-top:30px">
+    Algunos sabores se hacen por encargo con 48 horas de antelación. Si el tuyo
+    es uno de ellos, te lo decimos al pedir.
+  </p>
+</div>
+
+<div class="envoltura seccion" style="padding-bottom:20px">
+  <h2>Pronto, en el mostrador.</h2>
+  <p>Dos cosas que ya están en el horno de prueba.</p>
+  <div class="pronto">
+    <figure>
+      <img src="__PAN__" alt="Pan de jamón">
+      <figcaption>Pan de Jamón <small>· muy pronto</small></figcaption>
+    </figure>
+    <figure>
+      <img src="__GOL__" alt="Golfeados">
+      <figcaption>Golfeados <small>· muy pronto</small></figcaption>
+    </figure>
+  </div>
+</div>
+
+<footer class="pie">
+  <div class="envoltura">
+    <div class="pie-dentro">
+      <div>
+        <h4>Don Pepe Sabor</h4>
+        <address>Calle Berrocal 7, local 3<br>28021 Madrid</address>
+      </div>
+      <div>
+        <h4>Pedidos</h4>
+        <p class="telefono" style="color:var(--crema)">604 136 371</p>
+        <p>WhatsApp, todos los días que abrimos</p>
+      </div>
+      <div>
+        <h4>Registro sanitario</h4>
+        <p>RGSEAA 26.027183/M</p>
+      </div>
+    </div>
+    <p class="legal">Inversiones Ayala 1992 S.L. · Comida venezolana elaborada en Madrid</p>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    var botones = { Congelado: document.getElementById('congelado'), Frito: document.getElementById('frito') };
+    var nota = document.getElementById('notaFritura');
+    var precios = Array.prototype.slice.call(document.querySelectorAll('.precio'));
+
+    // El recargo real del local: 5 € la bandeja, 6 € la de 50 (lleva más aceite
+    // y más trabajo). Los cachitos van horneados y no tienen recargo.
+    function recargo(uds) { return uds === 50 ? 6 : 5; }
+
+    var TEXTO = {
+      Congelado: 'Los precios son de la bandeja congelada, para que la frías tú.',
+      Frito: 'Precios con la fritura incluida: 5 € por bandeja, 6 € la de 50. Los cachitos van horneados y no llevan recargo.'
+    };
+
+    function pintar(modo) {
+      precios.forEach(function (el) {
+        var base = parseFloat(el.dataset.base);
+        var uds = parseInt(el.dataset.uds, 10);
+        var total = (modo === 'Frito' && !el.dataset.horneado) ? base + recargo(uds) : base;
+        el.textContent = total + ' €';
+      });
+      Object.keys(botones).forEach(function (k) {
+        botones[k].setAttribute('aria-pressed', String(k === modo));
+      });
+      nota.textContent = TEXTO[modo];
+    }
+
+    Object.keys(botones).forEach(function (k) {
+      botones[k].addEventListener('click', function () { pintar(k); });
+    });
+
+    pintar('Congelado');
+  })();
+</script>
