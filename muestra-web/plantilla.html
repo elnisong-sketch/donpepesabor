@@ -229,11 +229,11 @@
     </div>
   </div>
 
-  <h1 class="titular">El queso tiene que hacer <em>hilo</em>.</h1>
+  <h1 class="titular">Donde cada bocado sabe a <em>Venezuela</em>.</h1>
 
   <p class="entradilla">
-    Tequeños, pastelitos y empanadas venezolanas. Los hacemos en Villaverde,
-    en Calle Berrocal, y los llevamos a cualquier punto de Madrid.
+    Tequeños, pastelitos, empanadas y cachitos. Hechos en Madrid, por bandejas,
+    como se hacen en casa.
   </p>
 
   <div class="foto-arranque"><img src="__HERO__" alt="Tequeños recién hechos, abiertos, con el queso estirándose"></div>
@@ -318,19 +318,17 @@
   <div class="reparto">
     <div>
       <h3>A domicilio</h3>
-      <p>Repartimos por <b>todo Madrid</b>. El precio del envío depende de la zona y te lo decimos al confirmar el pedido, antes de cobrar nada.</p>
+      <p>También ofrecemos <b>servicio de delivery</b>.</p>
     </div>
     <div>
       <h3>Recoger en la tienda</h3>
-      <p><b>Calle Berrocal 7, local 3</b><br>28021 Madrid · Butarque, Villaverde</p>
-      <p>Sin coste. Te avisamos cuando esté lista.</p>
+      <p><b>Calle Berrocal 7, local 3</b><br>28021 Madrid</p>
+      <p>Te avisamos cuando esté lista.</p>
     </div>
     <div>
-      <h3>Horario de reparto y recogida</h3>
+      <h3>Horario del local</h3>
       <ul class="horario">
-        <li><span>Lunes a jueves</span><span>10:00–13:00 · 16:00–20:00</span></li>
-        <li><span>Viernes</span><span>10:00–13:00 · 15:00–18:00</span></li>
-        <li><span>Sábado</span><span>Hasta las 18:00</span></li>
+        <li><span>Lunes a sábado</span><span>9:00–20:00 h</span></li>
         <li><span>Domingo</span><span>Cerrado</span></li>
       </ul>
     </div>
@@ -514,18 +512,15 @@
   function total() { return carrito.reduce(function (s, l) { return s + precioLinea(l); }, 0); }
   function bandejas() { return carrito.reduce(function (s, l) { return s + l.cantidad; }, 0); }
 
-  /* ── Turnos: los mismos que da la tienda, y cambian según el día ────────
-     Domingo no se reparte; el viernes la tarde se acorta; el sábado hay un
-     turno solo. */
+  /* ── Turnos: los mismos que anuncia el horario del local ────────────────
+     El local abre de lunes a sábado de 9:00 a 20:00, así que el día se parte
+     en dos turnos y el domingo no se puede elegir. Si la tienda real reparte
+     en otras franjas, aquí es donde se cambian. */
   function turnosDe(iso) {
     if (!iso) return [];
-    var d = new Date(iso + 'T12:00:00').getDay();
-    if (d === 0) return [];
-    if (d === 6) return [{ id: 'sabado', nombre: 'Todo el día', hora: '10:00–18:00' }];
-    if (d === 5) return [{ id: 'manana', nombre: 'Mañana', hora: '10:00–13:00' },
-                         { id: 'tarde',  nombre: 'Tarde',  hora: '15:00–18:00' }];
-    return [{ id: 'manana', nombre: 'Mañana', hora: '10:00–13:00' },
-            { id: 'tarde',  nombre: 'Tarde',  hora: '16:00–20:00' }];
+    if (new Date(iso + 'T12:00:00').getDay() === 0) return [];
+    return [{ id: 'manana', nombre: 'Mañana', hora: '9:00–14:00' },
+            { id: 'tarde',  nombre: 'Tarde',  hora: '14:00–20:00' }];
   }
 
   function pintarTurnos() {
@@ -534,7 +529,7 @@
     if (!lista.some(function (t) { return t.id === turno; })) turno = '';
     if (!lista.length) {
       caja.innerHTML = '<p class="letra-chica" style="grid-column:1/-1;text-align:left">' +
-        'Los domingos no repartimos. Elige otro día.</p>';
+        'Los domingos cerramos. Elige otro día.</p>';
       return;
     }
     caja.innerHTML = lista.map(function (t) {
@@ -563,7 +558,7 @@
     }
     var dia = document.getElementById('fDia').value;
     if (!dia) return 'Elige el día';
-    if (!turnosDe(dia).length) return 'Los domingos no repartimos: elige otro día';
+    if (!turnosDe(dia).length) return 'Los domingos cerramos: elige otro día';
     if (!turno) return 'Elige mañana o tarde';
     return '';
   }
