@@ -46,9 +46,9 @@ service cloud.firestore {
     }
 
     /**
-     * Direcciones ya buscadas en el mapa: el punto y los kilómetros, para no
-     * volver a preguntárselo a nadie. Ver "LAS DIRECCIONES QUE YA SE SABEN" en
-     * src/tienda/envio.js.
+     * Direcciones ya situadas en el mapa, para no volver a preguntar dónde
+     * caen. Solo el punto: ni kilómetros ni precios. Ver "LAS DIRECCIONES QUE
+     * YA SE SABEN" en src/tienda/envio.js.
      *
      * PRIVADO, COMO LOS PEDIDOS. Esta carpeta se pensó primero para que la
      * leyera también la tienda, que es pública, y se descartó por dos razones:
@@ -58,9 +58,8 @@ service cloud.firestore {
      *   concreta puede calcular su huella —el programa de la tienda va en el
      *   navegador de todo el mundo— y preguntar si existe. La respuesta sería
      *   "esa casa es cliente de Don Pepe", que no es asunto de nadie.
-     * - Lo que se escribe sin contraseña, lo escribe cualquiera. Si de estos
-     *   kilómetros sale el precio del envío, cualquiera podría dejar apuntado
-     *   que una casa de Alcalá está a dos kilómetros y pagar 6 € en vez de 10.
+     * - Lo que se escribe sin contraseña, lo escribe cualquiera. Un punto
+     *   falso mandaría al repartidor a la otra punta de Madrid.
      *
      * Así que aquí solo entra quien tiene contraseña. La tienda no lee esto:
      * recuerda las direcciones en el propio móvil del cliente, que para lo que

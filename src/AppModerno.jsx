@@ -18,7 +18,7 @@ import { costoFrito, fotoDe } from "./tienda/catalogo.js";
 import { MENSAJE_POR_DEFECTO } from "./tienda/Mantenimiento.jsx";
 // Los tramos de distancia con los que se cobra el envío son los mismos con los
 // que el informe clasifica las entregas: una sola definición, en envio.js.
-import { TRAMOS_ENVIO, claveDe, guardarDireccion, tramoDe } from "./tienda/envio.js";
+import { TRAMOS_ENVIO, tramoDe } from "./tienda/envio.js";
 import { kilometrosDesdeLaTienda } from "./ruta.js";
 
 // ─── DATOS INICIALES (idénticos a App.jsx) ──────────────────────────────────
@@ -1626,19 +1626,19 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
     setAceptando(a => [...a, w._id]);
     // `km`, `lat` y `lon` se quedan: son los que luego ordenan la ruta del
     // reparto. Antes se descartaban aquí y el repartidor salía a ciegas.
-    const { _id, creado, codigo, ...datos } = w;
     /**
-     * Y de paso se apunta la dirección, que es el momento bueno: aquí ya está
-     * situada y medida, y el pedido lo está aceptando una persona con
-     * contraseña. Así la ruta del repartidor no vuelve a buscar esa calle, ni
-     * hoy ni dentro de seis meses, ni en este teléfono ni en otro.
+     * AQUÍ NO SE APUNTA LA DIRECCIÓN EN LAS FICHAS COMPARTIDAS, aunque tentaba:
+     * el pedido ya trae el punto y los kilómetros, y aceptar es cosa de una
+     * persona con contraseña.
+     *
+     * Pero ese punto NO lo hemos calculado nosotros: lo escribió el navegador
+     * de quien hizo el pedido, y cualquiera puede dejar un pedido en la tienda.
+     * Apuntarlo aquí sería coger un dato de fuera y, por venir de una mano con
+     * contraseña, pasarlo a dato bueno para todos los repartos siguientes. Las
+     * fichas solo las escribe lo que situamos nosotros (ver `puntosDe` en
+     * ruta.js), que es lo único de lo que respondemos.
      */
-    if (datos.tipoEntrega !== "Recogida" && Number.isFinite(datos.lat)) {
-      guardarDireccion(claveDe(datos.direccion, datos.cp), {
-        lat: datos.lat, lon: datos.lon, km: datos.km,
-        estado: datos.direccionEstado === "aproximado" ? "aproximado" : "ok",
-      });
-    }
+    const { _id, creado, codigo, ...datos } = w;
     guardar({
       ...datos,
       id: generarId(),

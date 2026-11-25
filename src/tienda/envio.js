@@ -133,9 +133,9 @@ export function direccionParaBuscar(direccion) {
  *   programa de la tienda va en el navegador de todo el mundo, así que quien
  *   quiera saber si una casa concreta es cliente puede calcular su huella y
  *   preguntarlo. No es asunto suyo.
- * - Lo que se escribe sin contraseña lo escribe cualquiera. De estos kilómetros
- *   sale el precio del envío: cualquiera podría dejar apuntado que una casa de
- *   Alcalá está a dos kilómetros y pagar 6 € en vez de 10.
+ * - Lo que se escribe sin contraseña lo escribe cualquiera. Un punto falso
+ *   mandaría al repartidor a la otra punta de Madrid, y si algún día de aquí
+ *   saliera el precio, saldría el precio que pusiera el gracioso de turno.
  *
  * QUÉ SE GUARDA Y POR QUÉ ASÍ:
  *
@@ -143,10 +143,17 @@ export function direccionParaBuscar(direccion) {
  *   principal —eso son las reglas— pero una base de datos privada tampoco tiene
  *   por qué llevar las direcciones de los clientes escritas dos veces.
  *
- * - NO se guarda el precio, se guardan los kilómetros. El precio se calcula con
- *   ellos cada vez, así que el día que se cambien las tarifas no hay que ir a
- *   limpiar nada: los pedidos viejos ya cobrados se quedan como estaban y los
- *   nuevos cobran lo nuevo.
+ * - Se guarda DÓNDE ESTÁ LA CASA, y nada más. Ni kilómetros ni precio: eso se
+ *   calcula cuando hace falta y queda escrito en cada pedido, que es donde
+ *   tiene sentido. Así, el día que cambien las tarifas no hay que ir a limpiar
+ *   nada, y ningún número de estas fichas puede acabar cobrándole de menos a
+ *   nadie.
+ *
+ * - Solo entra aquí lo que hemos situado NOSOTROS, con el buscador, desde una
+ *   sesión con contraseña (ver `puntosDe` en ruta.js). Lo que trae un pedido de
+ *   la web no vale: lo escribió el navegador de quien pidió, y la tienda está
+ *   abierta a cualquiera. Un dato de fuera no se convierte en bueno porque lo
+ *   guarde una mano con contraseña.
  *
  * - La ficha de una dirección que NO se encontró no se guarda. Un fallo de hoy
  *   (el buscador caído, una calle recién abierta que el mapa todavía no tiene)
@@ -214,8 +221,8 @@ export function claveDe(direccion, cp) {
 }
 
 /**
- * Lo que ya se sabe de una dirección: `{ lat, lon, km }` (los km pueden faltar),
- * o null si es la primera vez o si no se puede leer.
+ * Dónde cae una dirección que ya se situó otro día: `{ lat, lon, estado }`, o
+ * null si es la primera vez o si no se puede leer.
  *
  * Que falle no es un problema: significa buscarla como se hacía antes.
  */
@@ -226,12 +233,7 @@ export async function direccionGuardada(clave) {
     if (!f.exists()) return null
     const d = f.data()
     if (!Number.isFinite(d.lat) || !Number.isFinite(d.lon)) return null
-    return {
-      lat: d.lat,
-      lon: d.lon,
-      km: Number.isFinite(d.km) ? d.km : undefined,
-      estado: d.estado === 'aproximado' ? 'aproximado' : 'ok',
-    }
+    return { lat: d.lat, lon: d.lon, estado: d.estado === 'aproximado' ? 'aproximado' : 'ok' }
   } catch {
     return null
   }
@@ -244,11 +246,13 @@ export async function direccionGuardada(clave) {
  * Solo tiene efecto con la sesión de la gestión o la del repartidor abierta;
  * desde la tienda pública las reglas lo rechazan, que es lo que se quiere.
  */
-export function guardarDireccion(clave, { lat, lon, km, estado }) {
+export function guardarDireccion(clave, { lat, lon, estado }) {
   if (!clave || !Number.isFinite(lat) || !Number.isFinite(lon)) return
-  const ficha = { lat, lon, estado: estado === 'aproximado' ? 'aproximado' : 'ok', fecha: new Date().toISOString().slice(0, 10) }
-  if (Number.isFinite(km)) ficha.km = km
-  setDoc(doc(db, COLECCION, clave), ficha).catch(() => { /* ya se buscará otra vez */ })
+  setDoc(doc(db, COLECCION, clave), {
+    lat, lon,
+    estado: estado === 'aproximado' ? 'aproximado' : 'ok',
+    fecha: new Date().toISOString().slice(0, 10),
+  }).catch(() => { /* ya se buscará otra vez */ })
 }
 
 /** Distancia en línea recta desde la tienda, solo para ordenar candidatos. */
