@@ -50,35 +50,24 @@ service cloud.firestore {
      * volver a preguntárselo a nadie. Ver "LAS DIRECCIONES QUE YA SE SABEN" en
      * src/tienda/envio.js.
      *
-     * El nombre de cada ficha es una HUELLA de la dirección, no la dirección:
-     * solo da con ella quien ya sabe la calle, el número y el código postal
-     * exactos. Y además:
+     * PRIVADO, COMO LOS PEDIDOS. Esta carpeta se pensó primero para que la
+     * leyera también la tienda, que es pública, y se descartó por dos razones:
      *
-     * - `get` sí, `list` no. Se puede consultar UNA ficha concreta; pedir la
-     *   lista entera, no. Sin eso, la lectura pública sería un listado de dónde
-     *   viven los clientes, y eso no puede ser.
-     * - La tienda puede CREAR fichas nuevas, pero no cambiar las que ya están.
-     *   Una dirección bien situada no la puede estropear nadie desde fuera;
-     *   corregirla, solo la gestión.
-     * - Los topes dejan fuera cualquier cosa que no sea un punto de Madrid y su
-     *   provincia, para que esto no sirva de almacén de nada más.
+     * - Lo que se lee sin contraseña, lo lee cualquiera. Aunque la ficha se
+     *   llame con una huella y no con la dirección, quien conozca una dirección
+     *   concreta puede calcular su huella —el programa de la tienda va en el
+     *   navegador de todo el mundo— y preguntar si existe. La respuesta sería
+     *   "esa casa es cliente de Don Pepe", que no es asunto de nadie.
+     * - Lo que se escribe sin contraseña, lo escribe cualquiera. Si de estos
+     *   kilómetros sale el precio del envío, cualquiera podría dejar apuntado
+     *   que una casa de Alcalá está a dos kilómetros y pagar 6 € en vez de 10.
+     *
+     * Así que aquí solo entra quien tiene contraseña. La tienda no lee esto:
+     * recuerda las direcciones en el propio móvil del cliente, que para lo que
+     * sirve —no volver a buscar la casa de uno mismo— va igual de bien.
      */
     match /distancias/{clave} {
-      allow get: if true;
-      allow create: if request.resource.data.keys().hasOnly(['lat', 'lon', 'km', 'estado', 'fecha'])
-        && request.resource.data.keys().hasAll(['lat', 'lon', 'estado', 'fecha'])
-        && request.resource.data.lat is number
-        && request.resource.data.lat > 39.4 && request.resource.data.lat < 41.3
-        && request.resource.data.lon is number
-        && request.resource.data.lon > -4.9 && request.resource.data.lon < -2.6
-        && request.resource.data.estado in ['ok', 'aproximado']
-        && request.resource.data.fecha is string
-        && request.resource.data.fecha.size() == 10
-        && (!('km' in request.resource.data) ||
-            (request.resource.data.km is number
-             && request.resource.data.km >= 0
-             && request.resource.data.km <= 200));
-      allow list, update, delete: if autorizado();
+      allow read, write: if autorizado();
     }
 
     /**

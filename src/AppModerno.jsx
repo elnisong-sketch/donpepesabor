@@ -18,7 +18,7 @@ import { costoFrito, fotoDe } from "./tienda/catalogo.js";
 import { MENSAJE_POR_DEFECTO } from "./tienda/Mantenimiento.jsx";
 // Los tramos de distancia con los que se cobra el envío son los mismos con los
 // que el informe clasifica las entregas: una sola definición, en envio.js.
-import { TRAMOS_ENVIO, tramoDe } from "./tienda/envio.js";
+import { TRAMOS_ENVIO, claveDe, guardarDireccion, tramoDe } from "./tienda/envio.js";
 import { kilometrosDesdeLaTienda } from "./ruta.js";
 
 // ─── DATOS INICIALES (idénticos a App.jsx) ──────────────────────────────────
@@ -1627,6 +1627,18 @@ function ModuloPedidos({ pedidos, setPedidos, productos, setProductos, clientes,
     // `km`, `lat` y `lon` se quedan: son los que luego ordenan la ruta del
     // reparto. Antes se descartaban aquí y el repartidor salía a ciegas.
     const { _id, creado, codigo, ...datos } = w;
+    /**
+     * Y de paso se apunta la dirección, que es el momento bueno: aquí ya está
+     * situada y medida, y el pedido lo está aceptando una persona con
+     * contraseña. Así la ruta del repartidor no vuelve a buscar esa calle, ni
+     * hoy ni dentro de seis meses, ni en este teléfono ni en otro.
+     */
+    if (datos.tipoEntrega !== "Recogida" && Number.isFinite(datos.lat)) {
+      guardarDireccion(claveDe(datos.direccion, datos.cp), {
+        lat: datos.lat, lon: datos.lon, km: datos.km,
+        estado: datos.direccionEstado === "aproximado" ? "aproximado" : "ok",
+      });
+    }
     guardar({
       ...datos,
       id: generarId(),

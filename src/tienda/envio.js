@@ -10,9 +10,9 @@
  * pedir) y otra que el buscador esté caído (no se puede castigar al cliente por
  * eso: se deja pedir con la tarifa base y se avisa de que está sin comprobar).
  *
- * Cada dirección se busca UNA VEZ. Lo que se averigua (el punto en el mapa y los
- * kilómetros) se guarda en Firestore y la próxima vez sale de ahí, sin preguntar
- * a nadie: ver "LAS DIRECCIONES QUE YA SE SABEN" más abajo.
+ * Una dirección no se busca dos veces si se puede evitar. Lo que se averigua se
+ * apunta, pero en sitios distintos según quién pregunte: ver "LAS DIRECCIONES
+ * QUE YA SE SABEN" más abajo.
  */
 
 import { doc, getDoc, setDoc } from 'firebase/firestore'
@@ -111,22 +111,37 @@ export function direccionParaBuscar(direccion) {
 /* ── LAS DIRECCIONES QUE YA SE SABEN ──────────────────────────────────────────
  *
  * Una dirección no se mueve de sitio. Buscarla en el mapa cada vez que alguien
- * la escribe es tiempo que el cliente pasa mirando "Comprobando…" y son tres
- * peticiones (Photon, y luego OSRM para los kilómetros) a servicios gratuitos
- * que un día pueden decir basta.
+ * la escribe es tiempo esperando y son peticiones (Photon, y luego OSRM para los
+ * kilómetros) a servicios gratuitos que un día pueden decir basta.
  *
- * Así que la primera vez se busca y se APUNTA en Firestore, y a partir de ahí
- * sale de ahí: el cliente de siempre ve su envío al instante y no se pregunta
- * nada a nadie.
+ * Hay DOS cuadernos donde apuntarlas, y no es lo mismo uno que otro:
+ *
+ * 1. EL MÓVIL DEL CLIENTE. Lo lleva la tienda (ver `apuntarEnvio` en
+ *    Carrito.jsx). Guarda solo las direcciones que ha escrito esa persona en
+ *    ese teléfono, y no sale de ahí: ni la vemos nosotros ni la ve nadie. Es lo
+ *    que hace que quien repite vea su envío al instante, que era el caso que
+ *    importaba.
+ *
+ * 2. ESTAS FICHAS, en Firestore. Las comparten la gestión y los repartidores,
+ *    que entran con contraseña, para no volver a situar cada mañana las mismas
+ *    calles en cada teléfono.
+ *
+ * LA TIENDA NO LEE NI ESCRIBE LAS FICHAS, aunque sería cómodo, y las reglas no
+ * se lo permiten. Dos motivos:
+ *
+ * - Lo que se lee sin contraseña lo lee cualquiera. La huella no basta: el
+ *   programa de la tienda va en el navegador de todo el mundo, así que quien
+ *   quiera saber si una casa concreta es cliente puede calcular su huella y
+ *   preguntarlo. No es asunto suyo.
+ * - Lo que se escribe sin contraseña lo escribe cualquiera. De estos kilómetros
+ *   sale el precio del envío: cualquiera podría dejar apuntado que una casa de
+ *   Alcalá está a dos kilómetros y pagar 6 € en vez de 10.
  *
  * QUÉ SE GUARDA Y POR QUÉ ASÍ:
  *
- * - La clave NO es la dirección, es una huella de la dirección (un revoltijo de
- *   letras y números del que no se puede volver atrás). La tienda es pública y
- *   cualquiera puede leer lo que la tienda lee, así que una lista con las
- *   direcciones de los clientes a la vista no puede existir. Con la huella, solo
- *   encuentra una ficha quien ya sabe la dirección exacta — y entonces ya la
- *   sabía. Las reglas además prohíben pedir "dame la lista entera".
+ * - La clave es una huella de la dirección, no la dirección. No es la defensa
+ *   principal —eso son las reglas— pero una base de datos privada tampoco tiene
+ *   por qué llevar las direcciones de los clientes escritas dos veces.
  *
  * - NO se guarda el precio, se guardan los kilómetros. El precio se calcula con
  *   ellos cada vez, así que el día que se cambien las tarifas no hay que ir a
@@ -224,9 +239,10 @@ export async function direccionGuardada(clave) {
 
 /**
  * Apunta lo averiguado para la próxima vez. No se espera a que termine y si
- * falla no se dice nada: es una comodidad, no parte del pedido. Las reglas de
- * Firestore solo dejan CREAR fichas nuevas desde la tienda, nunca cambiar una
- * que ya esté, para que nadie pueda estropear una dirección buena.
+ * falla no se dice nada: es una comodidad, no parte de ningún pedido.
+ *
+ * Solo tiene efecto con la sesión de la gestión o la del repartidor abierta;
+ * desde la tienda pública las reglas lo rechazan, que es lo que se quiere.
  */
 export function guardarDireccion(clave, { lat, lon, km, estado }) {
   if (!clave || !Number.isFinite(lat) || !Number.isFinite(lon)) return
@@ -377,46 +393,28 @@ export async function situar(direccionCompleta, cp) {
  * el cálculo de los kilómetros: el repartidor las necesita para ordenar la
  * ruta, y una cosa no tiene que ver con la otra.
  */
+/**
+ * OJO: esto NO mira las fichas de Firestore, y es a propósito.
+ *
+ * La tienda es pública y de estos kilómetros sale el precio del envío. Una
+ * ficha que cualquiera pudiera escribir sin contraseña sería un precio que
+ * cualquiera podría poner. Lo que la tienda sí hace es acordarse de las
+ * direcciones en el móvil del propio cliente (ver `apuntarEnvio` en
+ * Carrito.jsx), que es lo que de verdad le ahorra la espera a quien repite.
+ */
 export async function calcularEnvio(direccion, cp) {
-  const clave = claveDe(direccion, cp)
+  const { estado, sitio } = await situar(direccion, cp)
+  if (!sitio) return { estado, tarifa: TARIFA_BASE }
 
-  /**
-   * Primero, lo que ya se sabe. Si la dirección está apuntada con sus
-   * kilómetros, aquí se acabó: ni buscador ni rutas, cero peticiones, y el
-   * cliente ve el precio al momento.
-   */
-  const sabida = await direccionGuardada(clave)
-  if (sabida?.km != null) {
-    return { estado: sabida.estado, km: sabida.km, tarifa: tarifaPorKm(sabida.km), lat: sabida.lat, lon: sabida.lon, guardada: true }
-  }
-
-  // Si estaba el punto pero no los kilómetros (lo apuntó la gestión al ordenar
-  // una ruta), se salta el buscador y solo se piden los km.
-  let estado = sabida?.estado
-  let punto = sabida ? { lat: sabida.lat, lon: sabida.lon } : null
-
-  if (!punto) {
-    const hallado = await situar(direccion, cp)
-    if (!hallado.sitio) return { estado: hallado.estado, tarifa: TARIFA_BASE }
-    estado = hallado.estado
-    punto = { lat: hallado.sitio.lat, lon: hallado.sitio.lon }
-  }
-
+  const punto = { lat: sitio.lat, lon: sitio.lon }
   try {
-    const bruto = await kmHasta(punto.lat, punto.lon)
-    if (bruto == null) {
-      // Se apunta el punto aunque falten los km: la próxima vez se ahorra, al
-      // menos, la búsqueda de la calle.
-      guardarDireccion(clave, { ...punto, estado })
-      return { estado: 'sin-revisar', tarifa: TARIFA_BASE, ...punto }
-    }
-    const km = Math.round(bruto * 10) / 10
-    guardarDireccion(clave, { ...punto, km, estado })
+    const bruto = await kmHasta(sitio.lat, sitio.lon)
+    if (bruto == null) return { estado: 'sin-revisar', tarifa: TARIFA_BASE, ...punto }
     // Con el código postal el cobro es bueno, pero la dirección sigue sin
     // confirmar: se conserva 'aproximado' para que la gestión lo marque.
+    const km = Math.round(bruto * 10) / 10
     return { estado, km, tarifa: tarifaPorKm(km), ...punto }
   } catch {
-    guardarDireccion(clave, { ...punto, estado })
     return { estado: 'sin-revisar', tarifa: TARIFA_BASE, ...punto }
   }
 }
