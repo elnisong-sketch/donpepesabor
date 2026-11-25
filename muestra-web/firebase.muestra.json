@@ -1,0 +1,31 @@
+{
+  "comentario": [
+    "Configuración APARTE, solo para la web de muestra.",
+    "",
+    "El firebase.json de la raíz publica la tienda y la gestión. Este archivo no",
+    "los nombra siquiera: desplegar con `--config muestra-web/firebase.muestra.json`",
+    "no puede tocarlos aunque uno se equivoque de comando, porque para esta",
+    "configuración no existen.",
+    "",
+    "Se publica solo index.html. La plantilla, el script que la monta y este",
+    "mismo archivo se quedan fuera: son las piezas de taller, no la página."
+  ],
+  "hosting": {
+    "site": "donpepe-muestra",
+    "public": ".",
+    "ignore": [
+      "firebase.muestra.json",
+      "plantilla.html",
+      "montar.py",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "headers": [
+      {
+        "comentario": "La página lleva las fotos dentro y cambia cuando se retoca la muestra: media hora, para que al cliente le llegue la última versión sin esperas largas.",
+        "source": "**/*.html",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache, max-age=0" }]
+      }
+    ]
+  }
+}
