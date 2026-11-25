@@ -305,7 +305,14 @@ const Select = ({ label, options, ...props }) => (
       width: "100%", background: BG_INPUT, border: `1.5px solid ${BORDER}`, borderRadius: 10,
       color: TEXT_MAIN, padding: "11px 14px", fontSize: 15, boxSizing: "border-box", outline: "none"
     }} {...props}>
-      {options.map(o => <option key={o.value ?? o} value={o.value ?? o}>{o.label ?? o}</option>)}
+      {/* Una opción suelta, o un grupo con su título: `{ grupo, opciones }`.
+          Con casi cuarenta bandejas en la lista del pedido, recorrerlas todas
+          seguidas se hace largo; por categorías se encuentra de un vistazo. */}
+      {options.map(o => (o.opciones
+        ? <optgroup key={o.grupo} label={o.grupo}>
+            {o.opciones.map(x => <option key={x.value} value={x.value}>{x.label}</option>)}
+          </optgroup>
+        : <option key={o.value ?? o} value={o.value ?? o}>{o.label ?? o}</option>))}
     </select>
   </div>
 );
@@ -395,114 +402,111 @@ const precioFinalItem = (it, productosRef) => {
 };
 
 /**
- * Elegir productos como en la tienda: se ve el catálogo con sus fotos, se pulsa uno
- * y se elige bandeja, preparación y cantidad.
+ * Elegir productos para un pedido: un desplegable con las bandejas.
  *
- * La diferencia con la tienda es que aquí TODO el dinero se puede cambiar antes de
- * añadir la línea: el precio de la bandeja, el recargo por freír y la comisión. Es
- * lo que permite los precios pactados con un cliente sin tocar el inventario.
+ * Aquí no se vende, se apunta lo que alguien está pidiendo por teléfono, y eso
+ * cambia lo que conviene. La parrilla de fotos (que es lo que ve el cliente en
+ * la tienda) ocupaba media pantalla y obligaba a dos pasos: buscar el producto
+ * entre diecinueve fotos y, ya dentro, decir si era la de 25 o la de 50.
+ *
+ * En el desplegable cada BANDEJA es una línea: "Tequeños Tradicionales · 25 uds
+ * · 12,00 €". Se elige una y se acabó. Agrupadas por categoría, que casi
+ * cuarenta líneas seguidas se hacen largas de recorrer.
+ *
+ * La diferencia con la tienda es que aquí TODO el dinero se puede cambiar antes
+ * de añadir la línea: el precio de la bandeja, el recargo por freír y la
+ * comisión. Es lo que permite los precios pactados con un cliente sin tocar el
+ * inventario.
  */
 function SelectorProductos({ productos, ac, onAgregar, onPendiente }) {
-  const [abierto, setAbierto] = useState(null);     // producto desplegado
-  const [item, setItem] = useState(null);           // lo que se está configurando
+  const [elegido, setElegido] = useState("");   // "idDelProducto|Bandeja 25"
+  const [item, setItem] = useState(null);       // lo que se está configurando
 
-  const abrir = (p) => {
-    if (abierto === p.id) { setAbierto(null); setItem(null); return; }
-    const pres = p.variantes?.[0]?.presentacion || "Bandeja 25";
-    setAbierto(p.id);
-    setItem({ productoId: p.id, presentacion: pres, estado: "Congelado", cantidad: 1,
-              comision: 0, recargoFrito: costoFrito(pres), precioManual: "" });
-  };
+  const lista = useMemo(() => {
+    const grupos = new Map();
+    for (const p of productos) {
+      const cat = p.categoria || "Otros";
+      if (!grupos.has(cat)) grupos.set(cat, []);
+      // Un producto al que todavía no se le ha puesto bandeja en Inventario no
+      // desaparece de la lista: se puede pedir y ponerle el precio a mano.
+      const variantes = p.variantes?.length ? p.variantes : [{ presentacion: "Bandeja 25", precio: 0 }];
+      for (const v of variantes) {
+        grupos.get(cat).push({
+          value: `${p.id}|${v.presentacion}`,
+          label: `${p.nombre} · ${unidadesPorPresentacion(v.presentacion)} uds · ` +
+                 (v.precio > 0 ? `${v.precio.toFixed(2)}€` : "sin precio"),
+        });
+      }
+    }
+    return [...grupos].map(([grupo, opciones]) => ({ grupo, opciones }));
+  }, [productos]);
 
   /**
-   * Al cambiar de bandeja se trae el recargo de freír que le toca (5 € la de 25,
-   * 8 € la de 50), el mismo que paga el cliente en la web. Sigue siendo editable:
-   * lo que se escriba a mano manda hasta que se cambie de bandeja otra vez.
+   * Al elegir bandeja se trae el recargo de freír que le toca (5 € la de 25,
+   * 8 € la de 50), el mismo que paga el cliente en la web. Sigue siendo
+   * editable: lo que se escriba a mano manda.
    */
-  const cambiar = (campo, valor) => setItem(i => (
-    campo === "presentacion"
-      ? { ...i, presentacion: valor, recargoFrito: costoFrito(valor) }
-      : { ...i, [campo]: valor }
-  ));
-
-  const añadir = () => {
-    const prod = productos.find(p => String(p.id) === String(item.productoId));
-    const precio = precioFinalItem(item, productos);
-    onAgregar({ ...item, id: generarId(), nombreProducto: prod.nombre, precio,
-                precioTarifa: precioTarifa(item, productos), subtotal: precio * item.cantidad });
-    setAbierto(null); setItem(null);
+  const elegir = (valor) => {
+    setElegido(valor);
+    if (!valor) { setItem(null); return; }
+    const corte = valor.indexOf("|");
+    const pres = valor.slice(corte + 1);
+    setItem({ productoId: valor.slice(0, corte), presentacion: pres, estado: "Congelado",
+              cantidad: 1, comision: 0, recargoFrito: costoFrito(pres), precioManual: "" });
   };
 
-  const prodAbierto = productos.find(p => String(p.id) === String(abierto));
+  const cambiar = (campo, valor) => setItem(i => ({ ...i, [campo]: valor }));
+
+  const añadir = () => {
+    const p = productos.find(x => String(x.id) === String(item.productoId));
+    const precio = precioFinalItem(item, productos);
+    onAgregar({ ...item, id: generarId(), nombreProducto: p.nombre, precio,
+                precioTarifa: precioTarifa(item, productos), subtotal: precio * item.cantidad });
+    setElegido(""); setItem(null);
+  };
+
+  const prod = productos.find(p => String(p.id) === String(item?.productoId));
   const tarifa = item ? precioTarifa(item, productos) : 0;
   const unitario = item ? precioFinalItem(item, productos) : 0;
 
   /**
    * Se le dice al formulario qué hay elegido pero SIN añadir.
    *
-   * Todo lo que se configura aquí —bandeja, cantidad, precio— vive solo dentro
+   * Todo lo que se configura aquí —bandejas, precio, comisión— vive solo dentro
    * de este componente hasta que se pulsa "Añadir al pedido". Quien elegía el
    * producto y le daba directo a Guardar perdía la línea entera y se guardaba
    * un pedido de 0 bandejas y 0,00 €. Pasó el 30/10/2026.
    */
   useEffect(() => {
-    onPendiente?.(item && prodAbierto ? prodAbierto.nombre : null);
-  }, [item, prodAbierto, onPendiente]);
+    onPendiente?.(item && prod ? prod.nombre : null);
+  }, [item, prod, onPendiente]);
 
-  // El panel va en crema, como el resto del formulario. Esta caja se quedó en
-  // negro de un diseño anterior y el texto de dentro usa los colores del tema
-  // claro: el nombre del producto salía en marrón oscuro sobre negro y no se
-  // leía. Justo el dato que más importa de aquí.
+  // En crema, como el resto del formulario. Esta caja estuvo en negro de un
+  // diseño anterior, con el texto en los colores del tema claro: el nombre del
+  // producto salía en marrón oscuro sobre negro y no se leía.
   return (
     <div style={{ background: BG_APP, borderRadius: 14, padding: 14, marginBottom: 14, border: `1px solid ${BORDER}` }}>
       <p style={{ color: ac, fontSize: 13, fontWeight: 800, margin: "0 0 10px" }}>🧺 Elegir productos</p>
 
       {!productos.length && <Empty texto="No hay productos en el inventario" />}
 
-      {/* El catálogo DESAPARECE mientras se configura un producto, y esto es lo
-          importante de aquí.
+      <Select label="Producto y bandeja" value={elegido} onChange={e => elegir(e.target.value)}
+        options={[{ value: "", label: "— Elige un producto —" }, ...lista]} />
 
-          Antes el panel de opciones se abría debajo de la parrilla entera: se
-          pulsaban los tequeños y la pregunta de 25 o 50 salía casi mil píxeles
-          más abajo, detrás de los otros diecinueve productos. Parecía que no
-          había pasado nada. Ahora las opciones salen justo donde estaba el
-          producto que se acaba de pulsar, sin mover la pantalla. */}
-      <div style={{ display: prodAbierto ? "none" : "grid", gridTemplateColumns: "repeat(auto-fill, minmax(104px, 1fr))", gap: 8 }}>
-        {productos.map(p => {
-          const activo = String(p.id) === String(abierto);
-          return (
-            <button key={p.id} onClick={() => abrir(p)} style={{
-              background: activo ? ac + "22" : BG_CARD, border: `2px solid ${activo ? ac : BORDER}`,
-              borderRadius: 12, padding: 0, cursor: "pointer", overflow: "hidden", textAlign: "left",
-            }}>
-              <img src={fotoDe(p)} alt="" style={{ width: "100%", height: 62, objectFit: "cover", display: "block" }} />
-              <span style={{ display: "block", color: activo ? ac : TEXT_MAIN, fontSize: 11.5, fontWeight: 700, padding: "6px 7px 2px", lineHeight: 1.25 }}>
-                {p.nombre}
-              </span>
-              <span style={{ display: "block", color: TEXT_SUB, fontSize: 11, padding: "0 7px 7px" }}>
-                desde {Math.min(...(p.variantes || []).map(v => v.precio || 0)).toFixed(2)}€
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      {prodAbierto && item && (
-        <div>
-          <button type="button" onClick={() => { setAbierto(null); setItem(null); }}
-            style={{ background: "none", border: "none", color: TEXT_SUB, fontSize: 12.5,
-                     fontWeight: 700, cursor: "pointer", padding: 0, marginBottom: 10, fontFamily: "inherit" }}>
-            ← Ver todos los productos
-          </button>
-
+      {item && prod && (
+        <>
+          {/* La foto es pequeña y está aquí por una razón: en una lista de
+              cuarenta líneas parecidas, confirma de un golpe que se ha elegido
+              lo que se quería y no la de al lado. */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-            <img src={fotoDe(prodAbierto)} alt="" style={{ width: 44, height: 44, objectFit: "cover", borderRadius: 10, flex: "none" }} />
-            <p style={{ color: TEXT_MAIN, fontWeight: 800, margin: 0, fontSize: 15 }}>{prodAbierto.nombre}</p>
+            <img src={fotoDe(prod)} alt="" style={{ width: 40, height: 40, objectFit: "cover", borderRadius: 9, flex: "none" }} />
+            <div>
+              <p style={{ color: TEXT_MAIN, fontWeight: 800, margin: 0, fontSize: 14 }}>{prod.nombre}</p>
+              <p style={{ color: TEXT_SUB, fontSize: 12, margin: "2px 0 0" }}>
+                {unidadesPorPresentacion(item.presentacion)} uds por bandeja
+              </p>
+            </div>
           </div>
-
-          <Chips label="Bandeja" accent={ac}
-            options={(prodAbierto.variantes || []).map(v => ({ value: v.presentacion, label: `${unidadesPorPresentacion(v.presentacion)} uds · ${(v.precio || 0).toFixed(2)}€` }))}
-            value={item.presentacion} onChange={v => cambiar("presentacion", v)} />
 
           <Chips label="¿Cómo lo quiere?" accent={ac} options={["Congelado", "Frito"]}
             value={item.estado} onChange={v => cambiar("estado", v)} />
@@ -532,10 +536,10 @@ function SelectorProductos({ productos, ac, onAgregar, onPendiente }) {
             )}
           </p>
 
-          {/* A lo ancho y al final del panel: es el paso que se olvidaba, y
-              olvidarlo costaba la línea entera. */}
+          {/* A todo lo ancho: es el paso que se olvidaba, y olvidarlo costaba
+              la línea entera. */}
           <Btn accent={ac} onClick={añadir} style={{ width: "100%" }}>Añadir al pedido</Btn>
-        </div>
+        </>
       )}
     </div>
   );
