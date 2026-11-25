@@ -449,13 +449,25 @@ function SelectorProductos({ productos, ac, onAgregar, onPendiente }) {
     onPendiente?.(item && prodAbierto ? prodAbierto.nombre : null);
   }, [item, prodAbierto, onPendiente]);
 
+  // El panel va en crema, como el resto del formulario. Esta caja se quedó en
+  // negro de un diseño anterior y el texto de dentro usa los colores del tema
+  // claro: el nombre del producto salía en marrón oscuro sobre negro y no se
+  // leía. Justo el dato que más importa de aquí.
   return (
-    <div style={{ background: "#101015", borderRadius: 14, padding: 14, marginBottom: 14, border: `1px solid ${ac}22` }}>
+    <div style={{ background: BG_APP, borderRadius: 14, padding: 14, marginBottom: 14, border: `1px solid ${BORDER}` }}>
       <p style={{ color: ac, fontSize: 13, fontWeight: 800, margin: "0 0 10px" }}>🧺 Elegir productos</p>
 
       {!productos.length && <Empty texto="No hay productos en el inventario" />}
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(104px, 1fr))", gap: 8 }}>
+      {/* El catálogo DESAPARECE mientras se configura un producto, y esto es lo
+          importante de aquí.
+
+          Antes el panel de opciones se abría debajo de la parrilla entera: se
+          pulsaban los tequeños y la pregunta de 25 o 50 salía casi mil píxeles
+          más abajo, detrás de los otros diecinueve productos. Parecía que no
+          había pasado nada. Ahora las opciones salen justo donde estaba el
+          producto que se acaba de pulsar, sin mover la pantalla. */}
+      <div style={{ display: prodAbierto ? "none" : "grid", gridTemplateColumns: "repeat(auto-fill, minmax(104px, 1fr))", gap: 8 }}>
         {productos.map(p => {
           const activo = String(p.id) === String(abierto);
           return (
@@ -476,8 +488,17 @@ function SelectorProductos({ productos, ac, onAgregar, onPendiente }) {
       </div>
 
       {prodAbierto && item && (
-        <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${BORDER}` }}>
-          <p style={{ color: TEXT_MAIN, fontWeight: 800, margin: "0 0 10px", fontSize: 14 }}>{prodAbierto.nombre}</p>
+        <div>
+          <button type="button" onClick={() => { setAbierto(null); setItem(null); }}
+            style={{ background: "none", border: "none", color: TEXT_SUB, fontSize: 12.5,
+                     fontWeight: 700, cursor: "pointer", padding: 0, marginBottom: 10, fontFamily: "inherit" }}>
+            ← Ver todos los productos
+          </button>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+            <img src={fotoDe(prodAbierto)} alt="" style={{ width: 44, height: 44, objectFit: "cover", borderRadius: 10, flex: "none" }} />
+            <p style={{ color: TEXT_MAIN, fontWeight: 800, margin: 0, fontSize: 15 }}>{prodAbierto.nombre}</p>
+          </div>
 
           <Chips label="Bandeja" accent={ac}
             options={(prodAbierto.variantes || []).map(v => ({ value: v.presentacion, label: `${unidadesPorPresentacion(v.presentacion)} uds · ${(v.precio || 0).toFixed(2)}€` }))}
@@ -511,12 +532,33 @@ function SelectorProductos({ productos, ac, onAgregar, onPendiente }) {
             )}
           </p>
 
-          <Btn small accent={ac} onClick={añadir}>Añadir al pedido</Btn>
+          {/* A lo ancho y al final del panel: es el paso que se olvidaba, y
+              olvidarlo costaba la línea entera. */}
+          <Btn accent={ac} onClick={añadir} style={{ width: "100%" }}>Añadir al pedido</Btn>
         </div>
       )}
     </div>
   );
 }
+
+/**
+ * Título de un bloque del formulario del pedido.
+ *
+ * El formulario medía casi tres mil píxeles seguidos, con dieciséis cosas que
+ * rellenar una detrás de otra y sin un solo descanso. Dicho por la dueña: "la
+ * info está muy dispersa". Partirlo en cuatro bloques con su número no quita
+ * ningún campo, pero da puntos donde parar y saber por dónde se va.
+ */
+const Seccion = ({ numero, children }) => (
+  <div style={{ display: "flex", alignItems: "center", gap: 9, margin: "26px 0 12px" }}>
+    <span style={{ background: MARRON, color: "#fff", width: 21, height: 21, borderRadius: 11,
+                   display: "grid", placeItems: "center", fontSize: 11.5, fontWeight: 800, flex: "none" }}>
+      {numero}
+    </span>
+    <span style={{ color: TEXT_MAIN, fontSize: 13, fontWeight: 800, letterSpacing: .2 }}>{children}</span>
+    <span style={{ flex: 1, height: 1, background: BORDER }} />
+  </div>
+);
 
 function FormularioPedido({ productos, clientes, repartidores, pedidos, onGuardar, onCerrar, pedidoEditar }) {
   const ac = ACENTOS.pedidos;
@@ -675,6 +717,7 @@ function FormularioPedido({ productos, clientes, repartidores, pedidos, onGuarda
 
   return (
     <Modal title={pedidoEditar ? "Editar Pedido" : "Nuevo Pedido"} accent={ac} onClose={onCerrar}>
+      <Seccion numero={1}>Quién lo pide</Seccion>
       <Select label="Cliente registrado (opcional)"
         options={[{ value: "", label: "— Seleccionar cliente —" }, ...clientes.map(c => ({ value: c.id, label: `${c.nombre} · ${c.telefono}` }))]}
         value={form.clienteId} onChange={e => selCliente(e.target.value)} />
@@ -695,44 +738,83 @@ function FormularioPedido({ productos, clientes, repartidores, pedidos, onGuarda
           options={sedesCliente.map(etiquetaSede)}
           value={form.sede || ""} onChange={elegirSede} />
       )}
-      {/* La calle y el número por un lado, el piso por otro: lo que se busca en
-          el mapa es la calle, y meterle el piso la hacía fallar entera. */}
-      <Input label="Dirección *" value={form.direccion} onChange={e => set("direccion", e.target.value)} placeholder="Calle y número" />
-      <Input label="Piso, puerta, escalera" value={form.piso || ""} onChange={e => set("piso", e.target.value)} placeholder="2º E, escalera derecha" />
-      <Input label="Código Postal *" value={form.cp} onChange={e => set("cp", e.target.value)} placeholder="28XXX" />
-      {/* Qué papel se lleva el cliente. El ticket es lo normal; albarán y factura
-          son para negocios y piden los datos de quien compra. */}
-      <Chips label="Documento a entregar" accent={ac} options={DOCUMENTOS}
-        value={form.documento || "Ticket"} onChange={v => set("documento", v)} />
-      {pideFiscal(form.documento) && (
-        <div style={{ border: `1px solid ${BORDER}`, borderRadius: 12, padding: 14, marginBottom: 14, background: BG_APP }}>
-          <p style={{ color: TEXT_SUB, fontSize: 12, fontWeight: 700, margin: "0 0 10px", textTransform: "uppercase", letterSpacing: .5 }}>
-            Datos del negocio {form.documento === "Factura" ? "(obligatorios)" : "(para el albarán)"}
-          </p>
-          <Input label={form.documento === "Factura" ? "Razón social *" : "Nombre del negocio *"}
-            value={fiscal.razonSocial} onChange={e => setFiscal("razonSocial", e.target.value)} placeholder="Ej: Taberna El Puerto, S.L." />
-          <Input label={form.documento === "Factura" ? "NIF / CIF *" : "NIF / CIF"}
-            value={fiscal.nif} onChange={e => setFiscal("nif", e.target.value)} placeholder="Ej: B12345678" />
-          <Input label={form.documento === "Factura" ? "Dirección fiscal *" : "Dirección de entrega"}
-            value={fiscal.direccion} onChange={e => setFiscal("direccion", e.target.value)} placeholder="Calle, número" />
-          <Input label="Población" value={fiscal.poblacion} onChange={e => setFiscal("poblacion", e.target.value)} placeholder="Madrid" />
-          <Input label="Persona que recibe" value={fiscal.contacto} onChange={e => setFiscal("contacto", e.target.value)} placeholder="Quién firma la entrega" />
-          {form.documento === "Albarán" && (
-            <label style={{ display: "flex", alignItems: "center", gap: 8, color: TEXT_SUB, fontSize: 13, cursor: "pointer" }}>
-              <input type="checkbox" checked={!!form.albaranSinPrecios}
-                onChange={e => set("albaranSinPrecios", e.target.checked)} />
-              Albarán sin precios (lo firma un cocinero, no tiene por qué ver lo que paga su jefe)
-            </label>
-          )}
-          {falta.length > 0 && (
-            <p style={{ color: "#bf7d08", fontSize: 12.5, fontWeight: 700, margin: "8px 0 0" }}>
-              Para facturar falta: {falta.join(", ")}.
+      <Seccion numero={2}>Qué lleva este pedido</Seccion>
+
+      <SelectorProductos productos={productos} ac={ac} onAgregar={agregarItem} onPendiente={setSinAñadir} />
+
+      {/* El caso que de verdad pasa: se elige el producto y se va directo a
+          Guardar sin pulsar "Añadir al pedido", y la línea se pierde. */}
+      {sinAñadir && (
+        <p style={{ background: "#fdf2e3", border: `1px solid ${ORO}66`, borderRadius: 10,
+          color: "#8a5a08", fontSize: 13, fontWeight: 700, padding: "10px 12px", margin: "-6px 0 14px" }}>
+          ⚠️ Tienes <strong>{sinAñadir}</strong> elegido pero sin añadir. Pulsa
+          «Añadir al pedido» ahí arriba o se perderá.
+        </p>
+      )}
+
+      {form.items.length > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          <p style={{ color: TEXT_SUB, fontSize: 12, marginBottom: 6, fontWeight: 700 }}>PRODUCTOS EN EL PEDIDO</p>
+          {form.items.map((it, idx) => (
+            <div key={it.id} style={{ padding: "8px 0", borderBottom: `1px solid ${BORDER}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <span style={{ color: TEXT_MAIN, fontSize: 13 }}>{it.cantidad}x {it.nombreProducto} · {it.presentacion} · {it.estado}</span>
+                  <div style={{ color: TEXT_SUB, fontSize: 12, marginTop: 2 }}>
+                    {it.precio > 0 ? `Precio unitario: ${it.precio.toFixed(2)}€` : "Precio unitario: — (sin precio en Inventario)"}
+                    {it.precioTarifa > 0 && Math.abs(it.precioTarifa - it.precio) > 0.009 && (
+                      <span style={{ color: ACENTOS.gastos, fontWeight: 700 }}> · especial (tarifa {it.precioTarifa.toFixed(2)}€)</span>
+                    )}
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <span style={{ color: ac, fontSize: 14, fontWeight: 800 }}>{it.subtotal > 0 ? `${it.subtotal.toFixed(2)}€` : "—"}</span>
+                  <button onClick={() => setForm(f => ({ ...f, items: f.items.filter((_, i) => i !== idx) }))}
+                    style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: 16 }}>✕</button>
+                </div>
+              </div>
+
+              {/* TRAZABILIDAD, solo en los papeles de empresa.
+                  Se copia de la pegatina de la bandeja, que es donde está el
+                  dato de verdad. Va aquí y no en el selector porque estos
+                  pedidos los monta una persona a mano, con las bandejas
+                  delante: lo rellena de una pasada al final.
+                  En un ticket de particular no sale: estorbaría. */}
+              {pideFiscal(form.documento) && (
+                <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: 6, marginTop: 6 }}>
+                  <CampoLote etiqueta="Lote" valor={it.lote} tipo="text" placeholder="de la pegatina"
+                    onChange={v => cambiarItem(idx, "lote", v)} />
+                  <CampoLote etiqueta="Elaborado" valor={it.elaboracion} tipo="date"
+                    onChange={v => cambiarItem(idx, "elaboracion", v)} />
+                  <CampoLote etiqueta="Caduca" valor={it.caducidad} tipo="date"
+                    onChange={v => cambiarItem(idx, "caducidad", v)} />
+                </div>
+              )}
+            </div>
+          ))}
+          {(parseFloat(form.envio) || 0) > 0 && (
+            <p style={{ color: TEXT_SUB, fontSize: 13, textAlign: "right", margin: "8px 0 0" }}>
+              Subtotal: {subtotalProductos.toFixed(2)}€ + Envío: {(parseFloat(form.envio) || 0).toFixed(2)}€
             </p>
           )}
+          {total > 0 && <p style={{ color: ac, fontWeight: 800, textAlign: "right", marginTop: 4, fontSize: 17 }}>Total: {total.toFixed(2)}€</p>}
         </div>
       )}
+
+      <Seccion numero={3}>Cuándo y dónde</Seccion>
       <Chips label="Tipo de entrega" accent={ac} options={["Domicilio", "Recogida"]} value={form.tipoEntrega} onChange={v => cambiarTipoEntrega(v)} />
-      <Chips label="Forma de pago" accent={ac} options={formasPagoDe(form.tipoEntrega, form.formaPago)} value={form.formaPago} onChange={v => set("formaPago", v)} />
+      {/* La dirección, solo cuando hace falta. En una recogida viene él: tres
+          casillas que nadie va a rellenar son tres casillas de ruido. Lo que
+          ya estuviera escrito no se pierde si luego se cambia a domicilio. */}
+      {form.tipoEntrega === "Domicilio" && (
+        <>
+        {/* La calle y el número por un lado, el piso por otro: lo que se busca en
+            el mapa es la calle, y meterle el piso la hacía fallar entera. */}
+        <Input label="Dirección *" value={form.direccion} onChange={e => set("direccion", e.target.value)} placeholder="Calle y número" />
+        <Input label="Piso, puerta, escalera" value={form.piso || ""} onChange={e => set("piso", e.target.value)} placeholder="2º E, escalera derecha" />
+        <Input label="Código Postal *" value={form.cp} onChange={e => set("cp", e.target.value)} placeholder="28XXX" />
+        </>
+      )}
       <Input label="Fecha de entrega" type="date" value={form.fecha} onChange={e => set("fecha", e.target.value)} />
       {form.tipoEntrega === "Domicilio" && sinReparto(form.fecha) && (
         <p style={{ color: "#bf7d08", fontSize: 12.5, fontWeight: 700, margin: "-6px 0 12px" }}>
@@ -792,68 +874,40 @@ function FormularioPedido({ productos, clientes, repartidores, pedidos, onGuarda
       <Input label="Comentario para la entrega" value={form.nota || ""}
         onChange={e => set("nota", e.target.value)}
         placeholder="Timbre 3ºB · llamar al llegar · es un regalo…" />
-
-      <SelectorProductos productos={productos} ac={ac} onAgregar={agregarItem} onPendiente={setSinAñadir} />
-
-      {/* El caso que de verdad pasa: se elige el producto y se va directo a
-          Guardar sin pulsar "Añadir al pedido", y la línea se pierde. */}
-      {sinAñadir && (
-        <p style={{ background: "#fdf2e3", border: `1px solid ${ORO}66`, borderRadius: 10,
-          color: "#8a5a08", fontSize: 13, fontWeight: 700, padding: "10px 12px", margin: "-6px 0 14px" }}>
-          ⚠️ Tienes <strong>{sinAñadir}</strong> elegido pero sin añadir. Pulsa
-          «Añadir al pedido» ahí arriba o se perderá.
-        </p>
-      )}
-
-      {form.items.length > 0 && (
-        <div style={{ marginBottom: 14 }}>
-          <p style={{ color: TEXT_SUB, fontSize: 12, marginBottom: 6, fontWeight: 700 }}>PRODUCTOS EN EL PEDIDO</p>
-          {form.items.map((it, idx) => (
-            <div key={it.id} style={{ padding: "8px 0", borderBottom: "1px solid #25262f" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <span style={{ color: TEXT_MAIN, fontSize: 13 }}>{it.cantidad}x {it.nombreProducto} · {it.presentacion} · {it.estado}</span>
-                  <div style={{ color: "#666", fontSize: 12, marginTop: 2 }}>
-                    {it.precio > 0 ? `Precio unitario: ${it.precio.toFixed(2)}€` : "Precio unitario: — (sin precio en Inventario)"}
-                    {it.precioTarifa > 0 && Math.abs(it.precioTarifa - it.precio) > 0.009 && (
-                      <span style={{ color: ACENTOS.gastos, fontWeight: 700 }}> · especial (tarifa {it.precioTarifa.toFixed(2)}€)</span>
-                    )}
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <span style={{ color: ac, fontSize: 14, fontWeight: 800 }}>{it.subtotal > 0 ? `${it.subtotal.toFixed(2)}€` : "—"}</span>
-                  <button onClick={() => setForm(f => ({ ...f, items: f.items.filter((_, i) => i !== idx) }))}
-                    style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: 16 }}>✕</button>
-                </div>
-              </div>
-
-              {/* TRAZABILIDAD, solo en los papeles de empresa.
-                  Se copia de la pegatina de la bandeja, que es donde está el
-                  dato de verdad. Va aquí y no en el selector porque estos
-                  pedidos los monta una persona a mano, con las bandejas
-                  delante: lo rellena de una pasada al final.
-                  En un ticket de particular no sale: estorbaría. */}
-              {pideFiscal(form.documento) && (
-                <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr", gap: 6, marginTop: 6 }}>
-                  <CampoLote etiqueta="Lote" valor={it.lote} tipo="text" placeholder="de la pegatina"
-                    onChange={v => cambiarItem(idx, "lote", v)} />
-                  <CampoLote etiqueta="Elaborado" valor={it.elaboracion} tipo="date"
-                    onChange={v => cambiarItem(idx, "elaboracion", v)} />
-                  <CampoLote etiqueta="Caduca" valor={it.caducidad} tipo="date"
-                    onChange={v => cambiarItem(idx, "caducidad", v)} />
-                </div>
-              )}
-            </div>
-          ))}
-          {(parseFloat(form.envio) || 0) > 0 && (
-            <p style={{ color: TEXT_SUB, fontSize: 13, textAlign: "right", margin: "8px 0 0" }}>
-              Subtotal: {subtotalProductos.toFixed(2)}€ + Envío: {(parseFloat(form.envio) || 0).toFixed(2)}€
+      <Seccion numero={4}>Cómo paga y qué papel</Seccion>
+      <Chips label="Forma de pago" accent={ac} options={formasPagoDe(form.tipoEntrega, form.formaPago)} value={form.formaPago} onChange={v => set("formaPago", v)} />
+      {/* Qué papel se lleva el cliente. El ticket es lo normal; albarán y factura
+          son para negocios y piden los datos de quien compra. */}
+      <Chips label="Documento a entregar" accent={ac} options={DOCUMENTOS}
+        value={form.documento || "Ticket"} onChange={v => set("documento", v)} />
+      {pideFiscal(form.documento) && (
+        <div style={{ border: `1px solid ${BORDER}`, borderRadius: 12, padding: 14, marginBottom: 14, background: BG_APP }}>
+          <p style={{ color: TEXT_SUB, fontSize: 12, fontWeight: 700, margin: "0 0 10px", textTransform: "uppercase", letterSpacing: .5 }}>
+            Datos del negocio {form.documento === "Factura" ? "(obligatorios)" : "(para el albarán)"}
+          </p>
+          <Input label={form.documento === "Factura" ? "Razón social *" : "Nombre del negocio *"}
+            value={fiscal.razonSocial} onChange={e => setFiscal("razonSocial", e.target.value)} placeholder="Ej: Taberna El Puerto, S.L." />
+          <Input label={form.documento === "Factura" ? "NIF / CIF *" : "NIF / CIF"}
+            value={fiscal.nif} onChange={e => setFiscal("nif", e.target.value)} placeholder="Ej: B12345678" />
+          <Input label={form.documento === "Factura" ? "Dirección fiscal *" : "Dirección de entrega"}
+            value={fiscal.direccion} onChange={e => setFiscal("direccion", e.target.value)} placeholder="Calle, número" />
+          <Input label="Población" value={fiscal.poblacion} onChange={e => setFiscal("poblacion", e.target.value)} placeholder="Madrid" />
+          <Input label="Persona que recibe" value={fiscal.contacto} onChange={e => setFiscal("contacto", e.target.value)} placeholder="Quién firma la entrega" />
+          {form.documento === "Albarán" && (
+            <label style={{ display: "flex", alignItems: "center", gap: 8, color: TEXT_SUB, fontSize: 13, cursor: "pointer" }}>
+              <input type="checkbox" checked={!!form.albaranSinPrecios}
+                onChange={e => set("albaranSinPrecios", e.target.checked)} />
+              Albarán sin precios (lo firma un cocinero, no tiene por qué ver lo que paga su jefe)
+            </label>
+          )}
+          {falta.length > 0 && (
+            <p style={{ color: "#bf7d08", fontSize: 12.5, fontWeight: 700, margin: "8px 0 0" }}>
+              Para facturar falta: {falta.join(", ")}.
             </p>
           )}
-          {total > 0 && <p style={{ color: ac, fontWeight: 800, textAlign: "right", marginTop: 4, fontSize: 17 }}>Total: {total.toFixed(2)}€</p>}
         </div>
       )}
-
+      <Seccion numero={5}>Para terminar</Seccion>
       <Chips label="Estado del pedido" accent={ESTADO_COLORS[form.estado]} options={ESTADOS_PEDIDO} value={form.estado} onChange={v => set("estado", v)} />
       {/* Qué falta, dicho con todas las letras y antes del botón, para no tener
           que adivinar por qué está apagado. */}
