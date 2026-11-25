@@ -95,6 +95,9 @@
   .uds small { display: block; font-family: var(--texto); font-size: 10.5px; font-weight: 700; color: var(--arena); letter-spacing: .1em; margin-top: 3px; }
   .plato-nombre { min-width: 0; font-weight: 700; }
   .plato-nombre span { display: block; font-size: 13px; color: var(--arena); font-weight: 500; }
+  .aster { color: var(--oro); font-style: normal; font-weight: 700; margin-left: 3px; }
+  .pie-carta { margin-top: 26px; font-size: 14.5px; color: var(--arena); max-width: 56ch; }
+  .pie-carta .aster { margin: 0 4px 0 0; }
   .precio { font-family: var(--display); font-weight: 800; font-size: 1.18rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
   .sumar { width: 42px; height: 42px; flex: none; border-radius: 12px; cursor: pointer;
@@ -311,6 +314,11 @@
       <li class="plato" data-nombre="Cachitos de jamón" data-base="18" data-uds="6" data-horneado="1"></li>
     </ul>
   </section>
+
+  <p class="pie-carta">
+    <i class="aster">*</i>Productos que requieren ser solicitados con <b>48 horas</b>
+    de antelación.
+  </p>
 </div>
 
 <div class="envoltura seccion">
@@ -333,10 +341,6 @@
       </ul>
     </div>
   </div>
-  <p class="nota-fritura" style="margin-top:30px">
-    Algunos sabores se hacen por encargo con 48 horas de antelación. Si el tuyo
-    es uno de ellos, te lo decimos al confirmar.
-  </p>
 </div>
 
 <div class="envoltura seccion" style="padding-bottom:20px">
@@ -469,6 +473,7 @@
       fila.innerHTML =
         '<span class="uds">' + uds + '<small>UDS</small></span>' +
         '<span class="plato-nombre">' + corto(fila.dataset.nombre) +
+          (deEncargo(fila.dataset.nombre) ? '<i class="aster" aria-hidden="true">*</i>' : '') +
           (fila.dataset.apunte ? '<span>' + fila.dataset.apunte + '</span>' : '') + '</span>' +
         '<span class="precio">' + eur(precioDe(base, uds, horneado, modo)) + '</span>' +
         '<button type="button" class="sumar" aria-label="Añadir ' + fila.dataset.nombre + '">' +
@@ -477,6 +482,30 @@
         añadir(fila.dataset.nombre, uds, base, horneado);
       });
     });
+  }
+
+  /* ── El asterisco de los 48 h ───────────────────────────────────────────
+     La regla es la misma que aplica la tienda de verdad: hecho y listo para
+     llevar solo está el tequeño tradicional; todo lo demás se prepara cuando
+     se pide. Se decide por el nombre, y no línea a línea, para que un sabor
+     nuevo nazca con su asterisco sin que nadie se acuerde de ponérselo. */
+  function deEncargo(nombre) {
+    return !/^tequeños tradicionales$/i.test((nombre || '').trim());
+  }
+
+  /* El asterisco no puede ser solo un adorno: si en el carrito hay algo de
+     encargo, el primer día que se puede elegir se corre dos días. */
+  function primerDia() {
+    var d = new Date();
+    if (carrito.some(function (l) { return deEncargo(l.nombre); })) d.setDate(d.getDate() + 2);
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  }
+
+  function ajustarDia() {
+    var dia = document.getElementById('fDia');
+    var min = primerDia();
+    dia.min = min;
+    if (dia.value && dia.value < min) { dia.value = min; pintarTurnos(); }
   }
 
   /* En la carta ya manda el título de la familia: repetirlo en cada línea
@@ -558,6 +587,7 @@
     }
     var dia = document.getElementById('fDia').value;
     if (!dia) return 'Elige el día';
+    if (dia < primerDia()) return 'Lo que llevas se prepara por encargo: elige el ' + fechaLegible(primerDia()) + ' o un día posterior';
     if (!turnosDe(dia).length) return 'Los domingos cerramos: elige otro día';
     if (!turno) return 'Elige mañana o tarde';
     return '';
@@ -632,6 +662,7 @@
   function cambió() {
     pintarCarta();
     pintarPedido();
+    ajustarDia();
     revisar();
     var barra = document.getElementById('barra');
     barra.hidden = !carrito.length;
