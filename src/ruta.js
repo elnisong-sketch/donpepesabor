@@ -17,7 +17,9 @@
  * - Las coordenadas de cada portal ya las calcula la tienda al hacer el pedido
  *   (Photon, con Nominatim de respaldo) y ahora se guardan con él. Las que
  *   falten —pedidos viejos, o escritos a mano en la gestión— se buscan una vez
- *   y se quedan guardadas en el móvil.
+ *   y se quedan guardadas en dos sitios: en este móvil y en Firestore, donde
+ *   las ve también la tienda y el móvil del otro repartidor. Una dirección de
+ *   Madrid se busca una vez en la vida, no una vez por teléfono.
  * - Los tiempos de un portal a otro los da OSRM, el mismo servicio que la tienda
  *   usa ya para cobrar el envío por kilómetros.
  *
@@ -25,7 +27,7 @@
  * orden sencillo (franja y código postal) y lo dice.
  */
 
-import { ORIGEN_LAT, ORIGEN_LON, situar } from "./tienda/envio.js";
+import { ORIGEN_LAT, ORIGEN_LON, claveDe, direccionGuardada, guardarDireccion, situar } from "./tienda/envio.js";
 
 /** Margen que se acepta fuera de la franja sin que cuente como problema. */
 export const MARGEN_POR_DEFECTO = 30;
@@ -39,9 +41,19 @@ export const MINUTOS_EN_PUERTA = 8;
 
 const CACHE_COORDENADAS = "coordenadasReparto";
 
-/** La misma dirección escrita de dos maneras es la misma dirección. */
-const claveDireccion = (p) =>
+/**
+ * La misma dirección escrita de dos maneras es la misma dirección.
+ *
+ * Hay dos claves porque hay dos almacenes. La de este móvil admite cualquier
+ * cosa, incluso un pedido viejo sin código postal. La de Firestore es la huella
+ * que usa también la tienda (ver `claveDe` en tienda/envio.js), y sin código
+ * postal no existe: ahí se comparte o no se comparte, y para compartir las dos
+ * partes tienen que llamar a la dirección exactamente igual.
+ */
+const claveLocal = (p) =>
   `${p.direccion || ""} ${p.cp || ""}`.toLowerCase().replace(/\s+/g, " ").trim();
+
+const claveNube = (p) => claveDe(p.direccion, p.cp || "");
 
 function leerCache() {
   try { return JSON.parse(localStorage.getItem(CACHE_COORDENADAS) || "{}"); }
@@ -217,28 +229,54 @@ function mejorar(orden, tiempos, ventanas, salida, margen) {
 }
 
 /**
- * Las coordenadas de cada parada: las que trae el pedido, las que ya se
- * buscaron otro día, y las que haya que buscar ahora.
+ * Las coordenadas de cada parada, por orden de lo que menos cuesta:
  *
- * Se busca de una en una con un segundo de pausa porque los buscadores son
- * gratis y piden eso a cambio. Solo pasa la primera vez con cada dirección: los
- * pedidos de la web ya vienen situados y el resto se queda en el móvil.
+ *   1. las que trae el pedido (la tienda las calculó al cobrar el envío),
+ *   2. las que ya se buscaron otro día en ESTE móvil,
+ *   3. las que estén apuntadas en Firestore —las puso la tienda, o el móvil del
+ *      otro repartidor, o este mismo antes de cambiar de teléfono—,
+ *   4. y solo lo que no esté en ningún sitio se busca en el mapa.
+ *
+ * Buscar es el paso caro: de uno en uno, con un segundo de pausa, porque los
+ * buscadores son gratis y piden eso a cambio. Veinte paradas nuevas eran veinte
+ * segundos de espera mirando "Situando direcciones". Con el paso 3, eso solo
+ * pasa la primera vez que alguien reparte a esa calle, no cada mañana ni en
+ * cada teléfono.
  */
 async function puntosDe(paradas, alAvanzar) {
   const cache = leerCache();
-  const puntos = paradas.map(p => (esPunto(p) ? { lat: p.lat, lon: p.lon } : cache[claveDireccion(p)] || null));
+  const puntos = paradas.map(p => (esPunto(p) ? { lat: p.lat, lon: p.lon } : cache[claveLocal(p)] || null));
+  let nuevas = false;
+
+  /**
+   * Lo apuntado en Firestore, todo de golpe: son lecturas de nada y van en
+   * paralelo, mientras que cada búsqueda en el mapa cuesta más de un segundo.
+   * Si Firestore no contesta, `direccionGuardada` devuelve null y se busca como
+   * siempre: esto acelera, no hace falta.
+   */
+  await Promise.all(paradas.map(async (p, i) => {
+    if (puntos[i]) return;
+    const sabida = await direccionGuardada(claveNube(p));
+    if (!sabida) return;
+    puntos[i] = { lat: sabida.lat, lon: sabida.lon };
+    cache[claveLocal(p)] = puntos[i];
+    nuevas = true;
+  }));
+
   const faltan = puntos.reduce((n, p) => n + (p ? 0 : 1), 0);
 
-  let hechas = 0, nuevas = false;
+  let hechas = 0;
   for (let i = 0; i < paradas.length; i++) {
     if (puntos[i]) continue;
     if (hechas > 0) await espera(1100);
     alAvanzar?.(++hechas, faltan);
     try {
-      const { sitio } = await situar(paradas[i].direccion, paradas[i].cp || "");
+      const { estado, sitio } = await situar(paradas[i].direccion, paradas[i].cp || "");
       if (sitio) {
         puntos[i] = { lat: sitio.lat, lon: sitio.lon };
-        cache[claveDireccion(paradas[i])] = puntos[i];
+        cache[claveLocal(paradas[i])] = puntos[i];
+        // Y para todos los demás: la tienda la encontrará apuntada al cobrar.
+        guardarDireccion(claveNube(paradas[i]), { ...puntos[i], estado });
         nuevas = true;
       }
     } catch { /* esa se queda sin situar; las demás siguen */ }

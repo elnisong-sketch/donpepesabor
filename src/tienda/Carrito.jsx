@@ -4,7 +4,7 @@ import { db } from '../firebase.js'
 import { SIN_PREFERENCIA, huecosEn, sinReparto, textoFranja, turnosDe } from '../franjas.js'
 import { DIRECCION_LOCAL, PREFIJOS, etiquetaPrep, eur, unidades } from './catalogo.js'
 import { TODOS_LOS_PAGOS, pagosDe } from '../pedidos.js'
-import { TARIFA_BASE, TEXTO_TARIFAS, calcularEnvio } from './envio.js'
+import { TARIFA_BASE, TEXTO_TARIFAS, calcularEnvio, claveDe } from './envio.js'
 import {
   conPlazo, fechaLegible, fechaMinima, hoyLocal, irAWhatsapp, nuevoCodigo, porEncargoDe, redactarMensaje, registrarEnNube, totalesDe,
 } from './pedido.js'
@@ -15,6 +15,34 @@ import {
  * hora y la nota no se recuerdan, porque cambian en cada pedido.
  */
 const CLAVE_DATOS = 'dps_datos_cliente'
+
+/**
+ * Los envíos ya calculados en ESTE móvil, para que el cliente de siempre no
+ * espere nada: abre el carrito con su dirección puesta y el precio ya está.
+ *
+ * En Firestore también están apuntados (ver envio.js), pero eso son unas
+ * décimas de red; esto son cero. Lo uno no quita lo otro: aquí se resuelve el
+ * móvil de siempre y allí el móvil nuevo o el de un vecino.
+ */
+const CLAVE_ENVIOS = 'dps_envios_calculados'
+const ENVIOS_QUE_SE_RECUERDAN = 20
+
+function enviosSabidos() {
+  try { return JSON.parse(localStorage.getItem(CLAVE_ENVIOS) || '{}') } catch { return {} }
+}
+
+function apuntarEnvio(clave, res) {
+  if (!clave || !Number.isFinite(res?.km)) return   // sin kilómetros no hay nada que recordar
+  try {
+    const todos = enviosSabidos()
+    todos[clave] = { km: res.km, tarifa: res.tarifa, lat: res.lat, lon: res.lon, estado: res.estado }
+    const claves = Object.keys(todos)
+    // Una familia no tiene veinte casas: si hay más, es que se han ido
+    // escribiendo direcciones de prueba y las más viejas ya no hacen falta.
+    for (const vieja of claves.slice(0, Math.max(0, claves.length - ENVIOS_QUE_SE_RECUERDAN))) delete todos[vieja]
+    localStorage.setItem(CLAVE_ENVIOS, JSON.stringify(todos))
+  } catch { /* en modo privado no se puede guardar; da igual */ }
+}
 
 function datosGuardados() {
   try {
@@ -37,8 +65,8 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
   }))
   const [distancia, setDistancia] = useState(null)   // { km, tarifa }
   const [agenda, setAgenda] = useState({})           // huecos ya ocupados, por día y franja
-  const [direccion, setDireccion] = useState('vacia') // vacia | buscando | ok | no | sin-revisar
-  const [calculando, setCalculando] = useState(false)
+  // vacia | buscando | ok | aproximado | no | sin-revisar
+  const [direccion, setDireccion] = useState('vacia')
   const [verMensaje, setVerMensaje] = useState(false)
   const [enviando, setEnviando] = useState(false)
 
@@ -62,23 +90,50 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
   /**
    * Comprueba la dirección un segundo después de dejar de escribir.
    *
-   * No vale solo para cobrar el envío: si la dirección no existe, no se deja
-   * cerrar el pedido. Antes se cobraba la tarifa base y el repartidor se
-   * enteraba del problema delante del portal.
+   * ESE SEGUNDO ES LO IMPORTANTE. Escribir "Calle Berrocal 7" son dieciocho
+   * letras: sin la espera serían dieciocho búsquedas, diecisiete de ellas de
+   * direcciones a medias que no existen, y la última llegando a veces antes que
+   * las anteriores. El reloj se reinicia con cada letra y solo se busca cuando
+   * el cliente para.
+   *
+   * Y si la dirección ya se sabe, ni eso: sale puesta, sin esperar y sin
+   * preguntar a nadie.
+   *
+   * No vale solo para cobrar el envío: también avisa cuando no se encuentra.
+   * Pero avisar es todo lo que hace — el pedido se puede enviar igual, que
+   * perder un cliente por un mapa caído sería lo absurdo.
    */
   useEffect(() => {
+    if (!domicilio) { setDistancia(null); setDireccion('vacia'); return }
+    if (!cpMadrid || datos.direccion.trim().length < 5) { setDistancia(null); setDireccion('vacia'); return }
+
+    const clave = claveDe(datos.direccion.trim(), datos.cp.trim())
+    const sabido = clave ? enviosSabidos()[clave] : null
+    if (sabido) {
+      setDistancia(sabido)
+      setDireccion(sabido.estado || 'ok')
+      return
+    }
+
     setDistancia(null)
-    if (!domicilio) { setDireccion('vacia'); return }
-    if (!cpMadrid || datos.direccion.trim().length < 5) { setDireccion('vacia'); return }
     setDireccion('buscando')
+
+    /**
+     * Si el cliente sigue escribiendo mientras se busca, la respuesta que
+     * llegue tarde es de una dirección que ya no es la suya y hay que tirarla.
+     * Sin esto, con la red lenta se quedaba en pantalla el precio de lo que
+     * había escrito a medias.
+     */
+    let vigente = true
     const t = setTimeout(async () => {
-      setCalculando(true)
       const res = await calcularEnvio(datos.direccion.trim(), datos.cp.trim())
+      if (!vigente) return
+      apuntarEnvio(clave, res)
       setDistancia(res)
-      setDireccion(res.estado)      // ok | no | sin-revisar
-      setCalculando(false)
+      setDireccion(res.estado)      // ok | aproximado | no | sin-revisar
     }, 1000)
-    return () => clearTimeout(t)
+
+    return () => { vigente = false; clearTimeout(t) }
   }, [datos.direccion, datos.cp, domicilio, cpMadrid])
 
   // Si el cliente escribe él mismo "+..." o "00...", se respeta; si no, se le pone el prefijo elegido.
@@ -342,20 +397,40 @@ export default function Carrito({ abierto, carrito, onCerrar, onCambiar }) {
                     </div>
                     {cpMadrid && (
                       <>
-                        <div className={`envio-box${direccion === 'ok' ? '' : ' pendiente'}`}>
+                        {/* 'aproximado' cuenta como bueno: el portal no se ha
+                            confirmado, pero el código postal sitúa la zona y la
+                            tarifa que sale de ahí es la correcta. Antes caía en
+                            el último caso y le decía "escribe tu dirección" a
+                            quien ya la había escrito. */}
+                        <div className={`envio-box${direccion === 'ok' || direccion === 'aproximado' ? '' : ' pendiente'}`}>
                           <span>
-                            {direccion === 'buscando' || calculando ? '📍 Comprobando la dirección…'
+                            {direccion === 'buscando' ? '📍 Comprobando la dirección…'
                               : direccion === 'ok' ? <>📍 <b>{distancia.km} km</b> hasta tu dirección</>
-                              : direccion === 'sin-revisar' || direccion === 'no' ? 'No hemos podido situarla en el mapa; lo confirmamos contigo'
+                              : direccion === 'aproximado' ? <>📍 Unos <b>{distancia.km} km</b> hasta tu zona</>
+                              : direccion === 'no' ? 'No encontramos esa dirección en el mapa'
+                              : direccion === 'sin-revisar' ? 'Ahora mismo no podemos consultar el mapa'
                               : 'Escribe tu dirección para calcular el envío'}
                           </span>
-                          {direccion !== 'vacia' && !calculando && <b>{eur(envio)}</b>}
+                          {direccion !== 'vacia' && direccion !== 'buscando' && <b>{eur(envio)}</b>}
                         </div>
-                        {direccion === 'no' && (
+                        {direccion === 'aproximado' && (
                           <p className="hint">
-                            Puedes enviar el pedido igualmente: te escribimos por WhatsApp para
-                            confirmar la dirección antes de salir. El envío sale a {eur(TARIFA_BASE)};
-                            si tu casa queda más lejos, te lo decimos antes de cobrarte.
+                            Hemos situado tu código postal, pero no el portal exacto. El precio del
+                            envío ya es el definitivo; la dirección te la confirmamos por WhatsApp.
+                          </p>
+                        )}
+                        {/* Que el mapa falle no es culpa del cliente y no le va a
+                            costar el pedido: se le dice con todas las letras que
+                            puede enviarlo, y se distingue "esa calle no aparece"
+                            de "el mapa no contesta", que no es lo mismo. */}
+                        {(direccion === 'no' || direccion === 'sin-revisar') && (
+                          <p className="hint">
+                            <strong>Puedes enviar el pedido igualmente.</strong>{' '}
+                            {direccion === 'no'
+                              ? 'Nos llega la dirección tal como la has escrito y te escribimos por WhatsApp para confirmarla antes de salir.'
+                              : 'Tu dirección nos llega tal como la has escrito y te la confirmamos por WhatsApp antes de salir.'}{' '}
+                            El envío sale a {eur(TARIFA_BASE)}; si tu casa queda más lejos, te lo
+                            decimos antes de cobrarte.
                           </p>
                         )}
                       </>

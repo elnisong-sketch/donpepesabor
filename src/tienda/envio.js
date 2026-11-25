@@ -9,7 +9,14 @@
  * Importante: una cosa es que la dirección NO EXISTA (hay que avisar y no dejar
  * pedir) y otra que el buscador esté caído (no se puede castigar al cliente por
  * eso: se deja pedir con la tarifa base y se avisa de que está sin comprobar).
+ *
+ * Cada dirección se busca UNA VEZ. Lo que se averigua (el punto en el mapa y los
+ * kilómetros) se guarda en Firestore y la próxima vez sale de ahí, sin preguntar
+ * a nadie: ver "LAS DIRECCIONES QUE YA SE SABEN" más abajo.
  */
+
+import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { db } from '../firebase.js'
 
 export const ORIGEN_LAT = 40.3381
 export const ORIGEN_LON = -3.6752 // Calle Berrocal, 28021 Madrid (Butarque, Villaverde). Es el punto de la calle,
@@ -99,6 +106,133 @@ export function direccionParaBuscar(direccion) {
   if (!calle.length) return String(direccion || '').trim()
   const limpia = calle.join(',').replace(COLA_DEL_EDIFICIO, '').trim()
   return limpia || String(direccion || '').trim()
+}
+
+/* ── LAS DIRECCIONES QUE YA SE SABEN ──────────────────────────────────────────
+ *
+ * Una dirección no se mueve de sitio. Buscarla en el mapa cada vez que alguien
+ * la escribe es tiempo que el cliente pasa mirando "Comprobando…" y son tres
+ * peticiones (Photon, y luego OSRM para los kilómetros) a servicios gratuitos
+ * que un día pueden decir basta.
+ *
+ * Así que la primera vez se busca y se APUNTA en Firestore, y a partir de ahí
+ * sale de ahí: el cliente de siempre ve su envío al instante y no se pregunta
+ * nada a nadie.
+ *
+ * QUÉ SE GUARDA Y POR QUÉ ASÍ:
+ *
+ * - La clave NO es la dirección, es una huella de la dirección (un revoltijo de
+ *   letras y números del que no se puede volver atrás). La tienda es pública y
+ *   cualquiera puede leer lo que la tienda lee, así que una lista con las
+ *   direcciones de los clientes a la vista no puede existir. Con la huella, solo
+ *   encuentra una ficha quien ya sabe la dirección exacta — y entonces ya la
+ *   sabía. Las reglas además prohíben pedir "dame la lista entera".
+ *
+ * - NO se guarda el precio, se guardan los kilómetros. El precio se calcula con
+ *   ellos cada vez, así que el día que se cambien las tarifas no hay que ir a
+ *   limpiar nada: los pedidos viejos ya cobrados se quedan como estaban y los
+ *   nuevos cobran lo nuevo.
+ *
+ * - La ficha de una dirección que NO se encontró no se guarda. Un fallo de hoy
+ *   (el buscador caído, una calle recién abierta que el mapa todavía no tiene)
+ *   no puede quedarse pegado a esa dirección para siempre.
+ */
+
+const COLECCION = 'distancias'
+
+const sinTildes = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '')
+
+/**
+ * Lo que se escribe de muchas maneras y es lo mismo: "C/ Mayor nº 10" y
+ * "calle mayor 10" tienen que dar la misma huella o no se reaprovecha nada.
+ */
+const IGUALES = [
+  [/\bc\b/g, 'calle'],
+  [/\bcl\b/g, 'calle'],
+  [/\bavda?\b/g, 'avenida'],
+  [/\bav\b/g, 'avenida'],
+  [/\bpza\b/g, 'plaza'],
+  [/\bpl\b/g, 'plaza'],
+  [/\bpso\b/g, 'paseo'],
+  [/\bctra\b/g, 'carretera'],
+  [/\bcmno\b/g, 'camino'],
+  [/\bnumeros?\b/g, ''],
+  [/\bnum\b/g, ''],
+  [/\bn\b/g, ''],
+  [/\bde\b|\bdel\b|\bla\b|\blos\b|\blas\b/g, ''],
+]
+
+/**
+ * Huella corta de un texto. Dos maneras distintas de mezclarlo, pegadas: con
+ * 16 cifras hexadecimales, que dos direcciones distintas caigan en la misma
+ * ficha es tan improbable que no va a pasar en la vida del negocio.
+ */
+function huella(texto) {
+  let a = 0x811c9dc5
+  let b = 0x9e3779b9
+  for (let i = 0; i < texto.length; i++) {
+    const c = texto.charCodeAt(i)
+    a = Math.imul(a ^ c, 16777619) >>> 0
+    b = Math.imul(b + c + i, 2246822519) >>> 0
+    b = ((b << 13) | (b >>> 19)) >>> 0
+  }
+  return a.toString(16).padStart(8, '0') + b.toString(16).padStart(8, '0')
+}
+
+/**
+ * El nombre de la ficha de una dirección, o '' si no hay bastante para buscarla.
+ *
+ * Se hace sobre la dirección TAL COMO SE BUSCA (sin piso ni puerta), así que
+ * todo un edificio comparte ficha: el 3ºB y el 1ºA están en el mismo portal y a
+ * los mismos kilómetros. El código postal va delante en claro, que no dice
+ * dónde vive nadie y ayuda a mirar las fichas de una zona si algún día hace
+ * falta revisarlas.
+ */
+export function claveDe(direccion, cp) {
+  const postal = String(cp || '').replace(/\D/g, '')
+  let calle = sinTildes(String(direccionParaBuscar(direccion) || '')).toLowerCase()
+  calle = calle.replace(/[^a-z0-9]+/g, ' ')
+  for (const [de, a] of IGUALES) calle = calle.replace(de, a)
+  calle = calle.replace(/\s+/g, ' ').trim()
+  if (!postal || calle.length < 3) return ''
+  return `${postal}-${huella(`${postal} ${calle}`)}`
+}
+
+/**
+ * Lo que ya se sabe de una dirección: `{ lat, lon, km }` (los km pueden faltar),
+ * o null si es la primera vez o si no se puede leer.
+ *
+ * Que falle no es un problema: significa buscarla como se hacía antes.
+ */
+export async function direccionGuardada(clave) {
+  if (!clave) return null
+  try {
+    const f = await getDoc(doc(db, COLECCION, clave))
+    if (!f.exists()) return null
+    const d = f.data()
+    if (!Number.isFinite(d.lat) || !Number.isFinite(d.lon)) return null
+    return {
+      lat: d.lat,
+      lon: d.lon,
+      km: Number.isFinite(d.km) ? d.km : undefined,
+      estado: d.estado === 'aproximado' ? 'aproximado' : 'ok',
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Apunta lo averiguado para la próxima vez. No se espera a que termine y si
+ * falla no se dice nada: es una comodidad, no parte del pedido. Las reglas de
+ * Firestore solo dejan CREAR fichas nuevas desde la tienda, nunca cambiar una
+ * que ya esté, para que nadie pueda estropear una dirección buena.
+ */
+export function guardarDireccion(clave, { lat, lon, km, estado }) {
+  if (!clave || !Number.isFinite(lat) || !Number.isFinite(lon)) return
+  const ficha = { lat, lon, estado: estado === 'aproximado' ? 'aproximado' : 'ok', fecha: new Date().toISOString().slice(0, 10) }
+  if (Number.isFinite(km)) ficha.km = km
+  setDoc(doc(db, COLECCION, clave), ficha).catch(() => { /* ya se buscará otra vez */ })
 }
 
 /** Distancia en línea recta desde la tienda, solo para ordenar candidatos. */
@@ -244,17 +378,45 @@ export async function situar(direccionCompleta, cp) {
  * ruta, y una cosa no tiene que ver con la otra.
  */
 export async function calcularEnvio(direccion, cp) {
-  const { estado, sitio } = await situar(direccion, cp)
-  if (!sitio) return { estado, tarifa: TARIFA_BASE }
+  const clave = claveDe(direccion, cp)
 
-  const punto = { lat: sitio.lat, lon: sitio.lon }
+  /**
+   * Primero, lo que ya se sabe. Si la dirección está apuntada con sus
+   * kilómetros, aquí se acabó: ni buscador ni rutas, cero peticiones, y el
+   * cliente ve el precio al momento.
+   */
+  const sabida = await direccionGuardada(clave)
+  if (sabida?.km != null) {
+    return { estado: sabida.estado, km: sabida.km, tarifa: tarifaPorKm(sabida.km), lat: sabida.lat, lon: sabida.lon, guardada: true }
+  }
+
+  // Si estaba el punto pero no los kilómetros (lo apuntó la gestión al ordenar
+  // una ruta), se salta el buscador y solo se piden los km.
+  let estado = sabida?.estado
+  let punto = sabida ? { lat: sabida.lat, lon: sabida.lon } : null
+
+  if (!punto) {
+    const hallado = await situar(direccion, cp)
+    if (!hallado.sitio) return { estado: hallado.estado, tarifa: TARIFA_BASE }
+    estado = hallado.estado
+    punto = { lat: hallado.sitio.lat, lon: hallado.sitio.lon }
+  }
+
   try {
-    const km = await kmHasta(sitio.lat, sitio.lon)
-    if (km == null) return { estado: 'sin-revisar', tarifa: TARIFA_BASE, ...punto }
+    const bruto = await kmHasta(punto.lat, punto.lon)
+    if (bruto == null) {
+      // Se apunta el punto aunque falten los km: la próxima vez se ahorra, al
+      // menos, la búsqueda de la calle.
+      guardarDireccion(clave, { ...punto, estado })
+      return { estado: 'sin-revisar', tarifa: TARIFA_BASE, ...punto }
+    }
+    const km = Math.round(bruto * 10) / 10
+    guardarDireccion(clave, { ...punto, km, estado })
     // Con el código postal el cobro es bueno, pero la dirección sigue sin
     // confirmar: se conserva 'aproximado' para que la gestión lo marque.
-    return { estado, km: Math.round(km * 10) / 10, tarifa: tarifaPorKm(km), ...punto }
+    return { estado, km, tarifa: tarifaPorKm(km), ...punto }
   } catch {
+    guardarDireccion(clave, { ...punto, estado })
     return { estado: 'sin-revisar', tarifa: TARIFA_BASE, ...punto }
   }
 }

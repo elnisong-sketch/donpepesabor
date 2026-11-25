@@ -46,6 +46,42 @@ service cloud.firestore {
     }
 
     /**
+     * Direcciones ya buscadas en el mapa: el punto y los kilómetros, para no
+     * volver a preguntárselo a nadie. Ver "LAS DIRECCIONES QUE YA SE SABEN" en
+     * src/tienda/envio.js.
+     *
+     * El nombre de cada ficha es una HUELLA de la dirección, no la dirección:
+     * solo da con ella quien ya sabe la calle, el número y el código postal
+     * exactos. Y además:
+     *
+     * - `get` sí, `list` no. Se puede consultar UNA ficha concreta; pedir la
+     *   lista entera, no. Sin eso, la lectura pública sería un listado de dónde
+     *   viven los clientes, y eso no puede ser.
+     * - La tienda puede CREAR fichas nuevas, pero no cambiar las que ya están.
+     *   Una dirección bien situada no la puede estropear nadie desde fuera;
+     *   corregirla, solo la gestión.
+     * - Los topes dejan fuera cualquier cosa que no sea un punto de Madrid y su
+     *   provincia, para que esto no sirva de almacén de nada más.
+     */
+    match /distancias/{clave} {
+      allow get: if true;
+      allow create: if request.resource.data.keys().hasOnly(['lat', 'lon', 'km', 'estado', 'fecha'])
+        && request.resource.data.keys().hasAll(['lat', 'lon', 'estado', 'fecha'])
+        && request.resource.data.lat is number
+        && request.resource.data.lat > 39.4 && request.resource.data.lat < 41.3
+        && request.resource.data.lon is number
+        && request.resource.data.lon > -4.9 && request.resource.data.lon < -2.6
+        && request.resource.data.estado in ['ok', 'aproximado']
+        && request.resource.data.fecha is string
+        && request.resource.data.fecha.size() == 10
+        && (!('km' in request.resource.data) ||
+            (request.resource.data.km is number
+             && request.resource.data.km >= 0
+             && request.resource.data.km <= 200));
+      allow list, update, delete: if autorizado();
+    }
+
+    /**
      * Bandeja de entrada de los pedidos hechos en la tienda.
      *
      * Cualquiera puede DEJAR un pedido (la tienda es pública y el cliente no tiene
